@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Plan de deudas</title>
+<meta name="theme-color" content="#F3F7FA" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0C1620" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Deudas">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="format-detection" content="telephone=no">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="col" style="gap:2px">
+    <h1>Plan de deudas</h1>
+    <p class="note" id="sub"></p>
+  </header>
+  <main id="view" class="col"></main>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<nav aria-label="Secciones"><div class="tabs" id="tabs"></div></nav>
+<noscript><p style="padding:16px">Esta app necesita JavaScript para funcionar.</p></noscript>
+<script src="calc.js"></script>
+<script src="backup.js"></script>
+<script src="store.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
