@@ -66,3 +66,27 @@ details.card>summary{font-weight:600;cursor:pointer;min-height:28px;display:flex
 .toast button{border:0;background:none;color:inherit;font-weight:700;text-decoration:underline;font-size:14px;min-height:32px;padding:0 6px}
 .sr{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
 .ver{text-align:center;font-size:11px;color:var(--faint)}
+.mk-btn.big{min-height:52px;font-size:16px}
+.mk-bar.lg{height:8px;border-radius:4px}
+.mk-big.sm20{font-size:20px}
+.tile{display:block;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.tile>span{display:block}
+.tile .tl{display:flex;justify-content:space-between;gap:8px;font-size:13px;font-weight:600}
+.drow{display:flex;align-items:center;gap:10px;width:100%;min-height:64px;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.drow .nm{flex:1;min-width:0;overflow-wrap:anywhere;font-weight:600}
+.drow .sm{display:block;font-size:12px;font-weight:400;color:var(--muted)}
+.drow .amt{white-space:nowrap;font-variant-numeric:tabular-nums}
+.back{display:inline-flex;align-items:center;gap:2px;align-self:flex-start;border:0;background:none;color:var(--accent);font:600 15px var(--body);min-height:44px;padding:0}
+h2.dname,h2.wt{font:700 22px/1.2 var(--display);margin:0;letter-spacing:-.01em;overflow-wrap:anywhere}
+h2.wt{font-size:24px}
+.kvs{padding-top:4px;padding-bottom:4px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.kv:last-child{border-bottom:0}
+.kv span{color:var(--muted)}
+.kv b{text-align:right;overflow-wrap:anywhere;font-weight:600}
+.sb{display:flex;justify-content:space-between;gap:12px}
+.sb.mute{color:var(--muted)}
+.rowbtn{display:flex;justify-content:space-between;align-items:center;width:100%;min-height:44px;margin-top:8px;padding:0;border:0;border-top:1px solid var(--line);background:transparent;color:var(--accent);font:600 14px var(--body);text-align:left}
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.steps i{height:6px;border-radius:3px;background:var(--track)}
+.steps i.on{background:var(--accent)}

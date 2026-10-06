@@ -4,7 +4,7 @@
   var P = PDD.calc, B = PDD.backup, ST = PDD.store;
   var VERSION = '1.0.0';
   var S = null, C = {}, tab = 'inicio', undoInfo = null, toastT = null, pend = {}, saveT = null, storeOk = true, ui = {};
-  var TABS = [['inicio', 'Inicio', 'home'], ['plan', 'Plan', 'percentage'], ['deudas', 'Deudas', 'list'], ['fijos', 'Gastos', 'calendar'], ['ahorro', 'Ahorro', 'coin']];
+  var TABS = [['inicio', 'Inicio', 'home'], ['deudas', 'Deudas', 'list'], ['fijos', 'Gastos', 'calendar'], ['ahorro', 'Ahorro', 'coin'], ['ajustes', 'Ajustes', 'sliders']];
   var XCH = ['Curso', 'Arreglo', 'Regalo', 'Salud', 'Viaje', 'Compra grande'];
   var CH = ['Alquiler', 'Servicios', 'Internet y celular', 'Transporte', 'Salud', 'Educación'];
   var IC = {
@@ -18,7 +18,10 @@
     plus: '<path d="M12 5v14M5 12h14"/>',
     circle: '<circle cx="12" cy="12" r="9"/>',
     circleCheck: '<circle cx="12" cy="12" r="9"/><path d="M9 12l2 2l4 -4"/>',
-    share: '<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.2 10.8l7.6 -3.6M8.2 13.2l7.6 3.6"/>'
+    share: '<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.2 10.8l7.6 -3.6M8.2 13.2l7.6 3.6"/>',
+    sliders: '<path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+    chevron: '<path d="M9 6l6 6l-6 6"/>',
+    back: '<path d="M15 6l-6 6l6 6"/>'
   };
 
   // ---------- utilidades ----------
@@ -36,7 +39,7 @@
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* nada */ } }
   function isIOS() { return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
   function standalone() { return navigator.standalone === true || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches); }
-  function resetUi() { ui = { panel: null, form: null, del: null, fform: null, fdel: null, sub: 'fijos', xform: null, xdel: null, aform: false, imp: null, rst: false, det: ui.det || false }; }
+  function resetUi() { ui = { panel: null, form: null, del: null, fform: null, fdel: null, sub: 'fijos', xform: null, xdel: null, aform: false, imp: null, impErr: null, rst: false, detail: null, payDebt: null, edit: null, wiz: 1, fin: false }; }
   resetUi();
 
   // ---------- guardado e historial ----------
@@ -62,7 +65,7 @@
   }
   function sharesMap() { var o = {}; S.debts.filter(P.isAct).forEach(function (d) { o[d.n] = d.share; }); return o; }
   function resplit(motivo) { var a = sharesMap(); P.suggest(S); commit('reparto', { motivo: motivo, antes: a, despues: sharesMap() }); }
-  var dsnap = function (d) { return { n: d.n, b: d.b, min: d.min, rate: d.rate, due: d.due, late: d.late, paid: d.paid }; };
+  var dsnap = function (d) { return { n: d.n, b: d.b, min: d.min, rate: d.rate, due: d.due, late: d.late, paid: d.paid, bank: d.bank || '' }; };
 
   // ---------- avisos en pantalla ----------
   function toast(msg, withUndo) {
@@ -80,7 +83,7 @@
     var h = '<div class="card col" style="gap:10px" id="panel">';
     if (ui.panel === 'pay') {
       var act = S.debts.filter(function (d) { return d.b > 0; });
-      h += '<label class="lbl13" for="f-debt">¿Cuál pagaste?</label><select id="f-debt">' + act.map(function (d) { return '<option value="' + esc(d.id) + '">' + esc(d.n) + '</option>'; }).join('') + '</select><label class="lbl13" for="f-amt">¿Cuánto?</label><input id="f-amt" type="text" inputmode="numeric" data-money placeholder="$ 20.000" autocomplete="off">';
+      h += '<label class="lbl13" for="f-debt">¿Cuál pagaste?</label><select id="f-debt">' + act.map(function (d) { return '<option value="' + esc(d.id) + '"' + (d.id === ui.payDebt ? ' selected' : '') + '>' + esc(d.n) + '</option>'; }).join('') + '</select><label class="lbl13" for="f-amt">¿Cuánto?</label><input id="f-amt" type="text" inputmode="numeric" data-money placeholder="$ 20.000" autocomplete="off">';
     } else {
       h += '<label class="lbl13" for="f-amt">¿Cuánto apartaste?</label><input id="f-amt" type="text" inputmode="numeric" data-money placeholder="$ 15.000" autocomplete="off">';
     }
@@ -117,77 +120,100 @@
   }
   function etaText(tot, sim) {
     if (tot <= 0) return 'Sin deudas';
-    if (S.income <= 0) return 'Cargá lo que cobraste para calcular cuándo terminás';
+    if (S.income <= 0) return 'Cargá tu sueldo en Ajustes para calcular cuándo terminás';
     return sim.ok ? 'Libre en unos ' + sim.months + (sim.months === 1 ? ' mes' : ' meses') : 'No alcanza para los intereses';
   }
   function barLbl(v) { return v < 500 ? '0' : v >= 1e6 ? (v / 1e6).toFixed(1).replace('.', ',') + ' M' : Math.round(v / 1000) + ' mil'; }
-  function backupHtml() {
-    var last = S.lastBackup ? dateTxt(S.lastBackup) : 'todavía no guardaste una';
-    var h = '<div class="card col" style="gap:10px"><p style="font-weight:600">Compartir resumen</p><p class="mk-sub" style="font-size:13px">Se envía el resumen del mes y el historial completo de todo lo que cargaste. La app nunca manda nada sola.</p><button class="mk-btn pri" data-a="share">' + ic('share', 18) + 'Compartir resumen</button></div>';
-    h += '<details class="card" id="bk"' + (ui.det ? ' open' : '') + '><summary>Copia de seguridad y datos</summary><div class="col" style="gap:10px;margin-top:10px"><p class="mk-sub" style="font-size:13px">Tus datos están solo en este celular. Última copia: ' + last + '. El archivo de "Compartir resumen" también sirve como copia.</p><button class="mk-btn sm" data-a="backup">Guardar copia</button><label class="mk-btn sm" for="impfile" role="button">Restaurar copia</label><input class="sr" id="impfile" type="file" accept=".csv,text/csv,text/plain" tabindex="-1">';
+  function importBox() {
+    var h = '<label class="mk-btn sm" for="impfile" role="button">Restaurar copia</label><input class="sr" id="impfile" type="file" accept=".csv,text/csv,text/plain" tabindex="-1">';
     if (ui.imp) h += '<div class="notice" style="margin:0"><p>Copia del ' + dateTxt(ui.imp.S.updatedAt || Date.now()) + ': ' + ui.imp.S.debts.length + (ui.imp.S.debts.length === 1 ? ' deuda' : ' deudas') + ', deuda total ' + money(sum(ui.imp.S.debts, function (d) { return d.b; })) + '. Reemplaza todo lo que hay ahora.</p><div class="g2" style="gap:8px;margin-top:8px"><button class="mk-btn sm danger" data-a="impyes">Sí, restaurar</button><button class="mk-btn sm" data-a="impno">Cancelar</button></div></div>';
     if (ui.impErr) h += '<p class="notice" style="margin:0">' + esc(ui.impErr) + '</p>';
-    if (ui.rst) h += '<div class="notice" style="margin:0"><p>Se borra todo: deudas, gastos, ahorro e historial. ¿Guardaste una copia?</p><div class="col" style="gap:8px;margin-top:8px"><button class="mk-btn sm" data-a="backup">Guardar copia primero</button><button class="mk-btn sm danger" data-a="rstyes">Sí, borrar todo</button><button class="mk-btn sm" data-a="rstno">Cancelar</button></div></div>';
-    else h += '<button class="mk-btn sm" data-a="rst">Empezar de cero</button>';
-    return h + '</div></details><p class="ver">Versión ' + VERSION + '</p>';
+    return h;
+  }
+  function backupBox() {
+    var last = S.lastBackup ? dateTxt(S.lastBackup) : 'todavía no guardaste una';
+    var h = '<div class="card col" style="gap:10px"><p style="font-weight:600">Copia de seguridad</p><p class="mk-sub" style="font-size:13px">Tus datos están solo en este celular. Última copia: ' + last + '.</p><button class="mk-btn pri" data-a="share">' + ic('share', 18) + 'Compartir resumen</button><p class="mk-sub" style="font-size:13px">Se envía el resumen del mes y el historial completo de todo lo que cargaste. La app nunca manda nada sola. El archivo también sirve como copia.</p><button class="mk-btn sm" data-a="backup">Guardar copia</button>' + importBox() + '</div>';
+    if (ui.rst) h += '<div class="card col" style="gap:8px"><p>Se borra todo: deudas, gastos, ahorro e historial. ¿Guardaste una copia?</p><button class="mk-btn sm" data-a="backup">Guardar copia primero</button><button class="mk-btn sm danger" data-a="rstyes">Sí, borrar todo</button><button class="mk-btn sm" data-a="rstno">Cancelar</button></div>';
+    else h += '<button class="mk-btn sm danger" data-a="rst">Empezar de cero</button>';
+    return h + '<p class="ver">Versión ' + VERSION + '</p>';
+  }
+  // Una barra por mes: azul si la deuda bajó (o es la primera), roja si subió respecto del mes anterior.
+  function deudaCard(tot, prev) {
+    var sim = P.simulate(S, C), delta = prev !== null ? tot - prev : 0, hs = S.hist.slice(-3);
+    var series = hs.map(function (x) { return { v: x.total, l: P.shortName(x.m) }; }).concat([{ v: tot, l: P.shortName(S.month), cur: true }]);
+    var mx = Math.max.apply(null, series.map(function (x) { return x.v; })) || 1;
+    var bar = function (x, i) {
+      var up = i > 0 && x.v > series[i - 1].v, col = up ? 'var(--bad)' : (i === 0 && series.length > 1 ? 'var(--faint)' : 'var(--accent)');
+      var bh = Math.max(4, Math.round(x.v / mx * 64));
+      var lc = up ? 'color:var(--bad);font-weight:600' : x.cur ? 'color:var(--fg);font-weight:600' : '';
+      return '<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px"><span class="bl" style="' + lc + '">' + barLbl(x.v) + '</span><div class="dbar' + (up ? ' up' : '') + '" style="width:100%;height:' + bh + 'px;border-radius:3px;background:' + col + '"></div><span style="font-size:11px;color:var(--muted);' + (x.cur ? 'color:var(--fg);font-weight:600' : '') + '">' + x.l + '</span></div>';
+    };
+    return '<div class="card" id="debtCard"><p class="mk-lbl">Tu deuda</p><p class="mk-big">' + money(tot) + '</p>' +
+      (prev !== null ? '<p style="font-size:13px;font-weight:600;margin-top:2px;color:' + (delta <= 0 ? 'var(--good)' : 'var(--bad)') + '">' + (delta < 0 ? '↓ Bajó ' + money(-delta) + ' desde el cierre del mes pasado' : delta > 0 ? '↑ Subió ' + money(delta) + ' (intereses y cambios)' : 'Sin cambios desde el mes pasado') + '</p>' : '') +
+      '<p class="mk-sub">' + etaText(tot, sim) + '</p>' +
+      (tot > 0 || hs.length ? '<div style="display:flex;align-items:flex-end;gap:6px;height:104px;margin-top:12px">' + series.map(bar).join('') + '</div><p class="mk-sub" style="margin-top:8px">Cada barra es lo que debías al cerrar el mes. Si sube, se pone en rojo.</p>' : '') + '</div>';
   }
   function vInicio() {
     C = P.calc(S);
     var tot = sum(S.debts, function (d) { return d.b; }), T = C.T, Pd = C.Pd;
     var prev = S.hist.length ? S.hist[S.hist.length - 1].total : null;
-    var h = '<div class="g2" style="gap:8px"><button class="mk-btn pri" data-a="pay">' + ic('check', 18) + 'Pagué</button><button class="mk-btn" data-a="save">' + ic('coin', 18) + 'Aparté</button></div>' + panelHtml();
+    var h = '<button class="mk-btn pri big" data-a="pay">' + ic('check', 18) + 'Pagué</button>' + panelHtml();
     h += noticesHtml() + alertsHtml();
     if (!S.debts.length) h += '<div class="card"><p>Todavía no cargaste deudas.</p><p class="mk-sub">Empezá por la primera: con eso ya se arma el plan.</p><button class="mk-btn sm" style="margin-top:10px" data-a="tab" data-t="deudas">Ir a Deudas</button></div>';
     else {
-      var sim = P.simulate(S, C), delta = prev !== null ? tot - prev : 0;
-      var hs = S.hist.slice(-3);
-      var series = hs.map(function (x) { return { v: x.total, l: P.shortName(x.m) }; }).concat([{ v: tot, l: P.shortName(S.month), cur: true }]);
-      var proj = (sim.ok && tot > 0 && S.income > 0) ? sim.series.slice(0, 3).map(function (v, j) { return { v: v, l: P.shortName(P.monthAdd(S.month, j + 1)), pr: true }; }) : [];
-      var all = series.concat(proj), mx = Math.max.apply(null, all.map(function (x) { return x.v; })) || 1;
-      var dif = hs.length ? hs[0].total - tot : 0, pc = hs.length && hs[0].total > 0 ? Math.round(dif / hs[0].total * 100) : 0;
-      var bar = function (x) {
-        var bh = Math.max(4, Math.round(x.v / mx * 64));
-        return '<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px"><span class="bl">' + barLbl(x.v) + '</span><div style="width:100%;height:' + bh + 'px;border-radius:3px;background:' + (x.pr || x.cur ? 'var(--accent)' : 'var(--faint)') + (x.pr ? ';opacity:.4' : '') + '"></div><span style="font-size:11px;color:var(--muted)">' + x.l + '</span></div>';
-      };
-      h += '<div class="card"><p class="mk-lbl">Tu deuda</p><p class="mk-big">' + money(tot) + '</p>' +
-        (prev !== null ? '<p style="font-size:13px;font-weight:600;margin-top:2px;color:' + (delta <= 0 ? 'var(--good)' : 'var(--warn)') + '">' + (delta < 0 ? '↓ Bajó ' + money(-delta) + ' desde el cierre del mes pasado' : delta > 0 ? '↑ Subió ' + money(delta) + ' (intereses y cambios)' : 'Sin cambios desde el mes pasado') + '</p>' : '') +
-        '<p class="mk-sub">' + etaText(tot, sim) + '</p>' +
-        (dif > 0 ? '<div class="mk-bar"><i style="width:' + Math.min(100, pc) + '%;background:var(--good)"></i></div><p class="mk-sub">Bajaste ' + money(dif) + ' desde el cierre de ' + P.monthName(hs[0].m) + ' (' + pc + '%)</p>' : '') +
-        (tot > 0 || hs.length ? '<div style="display:flex;align-items:flex-end;gap:6px;height:104px;margin-top:12px">' + all.map(bar).join('') + '</div>' : '') +
-        (proj.length ? '<p class="mk-sub" style="margin-top:8px">Las barras claras muestran cómo bajaría si seguís el plan.</p>' : '') + '</div>';
-      h += '<div class="card"><p class="mk-lbl">Pago propuesto de ' + P.monthName(S.month) + '</p><p class="mk-big">' + money(Pd) + ' de ' + money(T) + '</p><div class="mk-bar"><i style="width:' + (T > 0 ? Math.min(100, Math.round(Pd / T * 100)) : 100) + '%;background:var(--accent)"></i></div><p class="mk-sub">' + (T - Pd > 0 ? 'Te faltan ' + money(T - Pd) + ' para cerrar el mes' : 'Mes cumplido') + '</p><div class="col" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">' +
+      h += '<div class="card"><p class="mk-lbl">Este mes te toca pagar</p><p class="mk-big">' + money(T) + '</p><div class="mk-bar lg"><i style="width:' + (T > 0 ? Math.min(100, Math.round(Pd / T * 100)) : 100) + '%;background:var(--accent)"></i></div><p class="mk-sub" style="font-size:13px;margin-top:6px">' + (T - Pd > 0 ? 'Pagaste ' + money(Pd) + '. Te faltan ' + money(T - Pd) + '.' : 'Mes cumplido') + '</p><div class="col" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">' +
         S.debts.map(function (d) {
           var t = C.t[d.id], ok = t > 0 && d.paid >= t, gone = d.b === 0 && t === 0;
           return '<div class="mk-row">' + ((ok || gone) ? ic('circleCheck', 22, 'var(--good)') : ic('circle', 22, 'var(--faint)')) + '<span class="nm">' + esc(d.n) + '<span class="sm">' + (gone ? 'Saldada' : 'Pagaste ' + money(Math.min(d.paid, t)) + ' de ' + money(t)) + dueTag(d) + '</span></span></div>';
         }).join('') + '</div></div>';
-    }
-    if (S.income > 0) {
-      var segs = [['Deudas', C.T, 'var(--accent)'], ['Ahorro', C.sAmt, 'var(--good)'], ['Gastos fijos', C.fixedTotal, 'var(--faint)'], ['Extras', C.extraTotal, 'var(--extra)'], ['Libre', Math.max(0, C.free), 'var(--sun)']].filter(function (x) { return x[1] > 0; });
-      var sm = sum(segs, function (x) { return x[1]; }) || 1;
-      h += '<div class="card"><p class="mk-lbl">A dónde va lo que cobraste</p><p class="mk-big">' + money(S.income) + '</p><div style="display:flex;height:14px;border-radius:7px;overflow:hidden;margin-top:10px;gap:2px">' + segs.map(function (x) { return '<div style="width:' + (x[1] / sm * 100) + '%;background:' + x[2] + '"></div>'; }).join('') + '</div><div class="legend">' + segs.map(function (x) { return '<div style="display:flex;align-items:center;gap:8px;font-size:13px;min-width:0"><span style="width:10px;height:10px;border-radius:50%;background:' + x[2] + ';flex:none"></span><span style="flex:1;min-width:0;color:var(--muted)">' + x[0] + '</span><span style="font-weight:600;font-variant-numeric:tabular-nums">' + money(x[1]) + '</span></div>'; }).join('') + '</div><button class="lnk" style="margin-top:8px;padding-left:0" data-a="xgo">Anotar un gasto extra</button></div>';
+      h += deudaCard(tot, prev);
     }
     var cp = S.goal > 0 ? Math.min(100, Math.round(S.saved / S.goal * 100)) : 0;
-    h += '<div class="card"><div style="display:flex;justify-content:space-between;gap:8px"><span class="mk-lbl">Colchón de emergencia</span>' + (S.goal > 0 ? '<span style="font-size:13px;font-weight:600">' + cp + '%</span>' : '') + '</div><p class="mk-big">' + money(S.saved) + '</p><div class="mk-bar"><i style="width:' + cp + '%;background:var(--good)"></i></div><p class="mk-sub">' + (S.goal > 0 ? 'Meta ' + money(S.goal) + (C.sAmt > 0 ? ' · este mes apartaste ' + money(S.savedMonth) + ' de ' + money(C.sAmt) : '') : 'Todavía no definiste una meta. Podés hacerlo en Ahorro.') + '</p></div>';
-    return h + backupHtml();
+    h += '<div class="g2" style="gap:8px"><div class="card"><p class="mk-lbl">Libre para vivir</p>' +
+      (S.income > 0 ? '<p class="mk-big sm20" style="color:' + (C.free < 0 ? 'var(--bad)' : 'var(--fg)') + '">' + money(C.free) + '</p><p class="mk-sub">De un sueldo de ' + money(S.income) + ', después de gastos, deudas y ahorro</p>' : '<p class="mk-sub" style="margin-top:6px">Cargá tu sueldo para verlo.</p><button class="lnk" style="padding-left:0" data-a="tab" data-t="ajustes">Cargar sueldo</button>') +
+      '</div><button class="card tile" data-a="tab" data-t="ahorro" aria-label="Ir a Ahorro"><span class="tl"><span class="mk-lbl">Ahorro</span>' + (S.goal > 0 ? '<b>' + cp + '%</b>' : '') + '</span><span class="mk-big sm20">' + money(S.saved) + '</span><span class="mk-bar"><i style="width:' + cp + '%;background:var(--good)"></i></span><span class="mk-sub">' + (S.goal > 0 ? 'Meta ' + money(S.goal) : 'Todavía no definiste una meta') + '</span></button></div>';
+    return h;
   }
 
-  // ---------- Plan ----------
+  // ---------- Ajustes ----------
   function pctCtl(k, v) {
     return '<span class="pc"><button class="st" data-a="step" data-k="' + k + '" data-d="-1" aria-label="Bajar porcentaje">−</button><span class="pcw"><input class="pcin" type="text" inputmode="numeric" data-pct="' + k + '" value="' + v + '" aria-label="Porcentaje"><span>%</span></span><button class="st" data-a="step" data-k="' + k + '" data-d="1" aria-label="Subir porcentaje">+</button></span>';
   }
-  function planBox() {
+  function rowBtn(a, label) { return '<button class="rowbtn" data-a="' + a + '"><span>' + label + '</span><span aria-hidden="true">›</span></button>'; }
+  // 'view': solo lectura; 'edit': con controles; 'wiz': configuración inicial (con controles, sin botones)
+  function pctMode() { return (!S.setup || ui.fin) ? 'wiz' : ui.edit === 'pct' ? 'edit' : 'view'; }
+  function pctBox(mode) {
     C = P.calc(S);
-    var inc = S.income, h = '<p style="font-weight:600;margin-bottom:10px">Cómo se reparte ' + P.monthName(S.month) + '</p><div class="col" style="gap:10px">';
-    h += '<div class="pl"><span>Deudas</span>' + pctCtl('dp', S.dp) + '<span class="amt">' + money(C.T) + '</span></div>';
-    h += '<div class="pl"><span>Ahorro</span>' + (C.full ? '<span class="pc"><span style="min-width:0;font-weight:400;color:var(--muted)">Completo</span></span>' : pctCtl('sp', S.sp)) + '<span class="amt">' + money(C.sAmt) + '</span></div>';
-    h += '<div class="pl"><span>Gastos fijos <button class="lnk" data-a="tab" data-t="fijos">Editar</button></span><span class="pc"><span>' + (inc > 0 ? Math.round(C.fixedTotal / inc * 100) : 0) + '%</span></span><span class="amt">' + money(C.fixedTotal) + '</span></div>';
-    h += '<div class="pl"><span>Gastos extras <button class="lnk" data-a="xgo">' + (C.extraTotal > 0 ? 'Editar' : 'Agregar') + '</button></span><span class="pc"><span>' + (inc > 0 ? Math.round(C.extraTotal / inc * 100) : 0) + '%</span></span><span class="amt">' + money(C.extraTotal) + '</span></div>';
-    h += '<div class="pl"><span>Libre para vivir</span><span class="pc"><span>' + (inc > 0 ? Math.round(C.free / inc * 100) : 0) + '%</span></span><span class="amt" style="color:' + (C.free < 0 ? 'var(--bad)' : 'var(--fg)') + '">' + money(C.free) + '</span></div></div>';
-    if (C.free < 0 && inc > 0) h += '<p class="notice">Los gastos fijos, los extras y el plan superan lo que cobraste por ' + money(-C.free) + '. Bajá el porcentaje de deudas o de ahorro, o revisá los gastos.</p>';
-    if (inc <= 0) h += '<p class="mk-sub" style="margin-top:10px">Cargá lo que cobraste para calcular el plan.</p>';
+    var inc = S.income, ctl = mode !== 'view';
+    var h = '<p style="font-weight:600;margin-bottom:10px">Cuánto de lo que cobrás va a cada cosa</p><div class="col" style="gap:10px">';
+    if (ctl) {
+      h += '<div class="pl"><span>A deudas</span>' + pctCtl('dp', S.dp) + '<span class="amt">' + money(C.T) + '</span></div>';
+      h += '<div class="pl"><span>A ahorro</span>' + (C.full ? '<span class="pc"><span style="min-width:0;font-weight:400;color:var(--muted)">Completo</span></span>' : pctCtl('sp', S.sp)) + '<span class="amt">' + money(C.sAmt) + '</span></div>';
+    } else {
+      h += '<div class="sb"><span>A deudas</span><b>' + S.dp + '% · ' + money(C.T) + '</b></div>';
+      h += '<div class="sb"><span>A ahorro</span><b>' + (C.full ? 'Completo · pasa a deudas' : S.sp + '% · ' + money(C.sAmt)) + '</b></div>';
+    }
+    h += '<div class="sb mute"><span>Para gastos y vivir</span><span>' + Math.max(0, 100 - S.dp - S.sp) + '%</span></div></div>';
+    if (C.free < 0 && inc > 0) h += '<p class="notice">Los gastos fijos, los extras y el plan superan el sueldo por ' + money(-C.free) + '. Bajá el porcentaje de deudas o de ahorro, o revisá los gastos.</p>';
     if (C.short) h += '<p class="notice">El ' + S.dp + '% no alcanza para los mínimos (' + money(C.sumMin) + '). Se usa ese monto.</p>';
-    if (C.full) h += '<p class="mk-sub" style="margin-top:10px">El colchón llegó a la meta: el porcentaje de ahorro pasa a deudas.</p>';
-    return h + '<p class="mk-sub" style="margin-top:10px">El monto de deudas se divide entre cada una en el cuadro de abajo.</p>';
+    if (C.full && ctl) h += '<p class="mk-sub" style="margin-top:10px">El ahorro llegó a la meta: el porcentaje de ahorro pasa a deudas.</p>';
+    h += inc > 0 ? '<p class="mk-sub" style="margin-top:10px">Calculado sobre el sueldo de ' + money(inc) + '. Son los valores que acordaron.</p>' : '<p class="mk-sub" style="margin-top:10px">Cargá el sueldo para calcular los montos.</p>';
+    if (mode === 'view') h += rowBtn('editpct', 'Cambiar los porcentajes');
+    else if (mode === 'edit') h += '<button class="mk-btn sm pri" style="margin-top:10px" data-a="editdone">Listo</button>';
+    return h;
+  }
+  function sueldoCard() {
+    var e = ui.edit === 'sueldo', tip = '<p class="mk-sub">Si cambia mucho de un mes a otro, poné un monto que cobres seguro.</p>';
+    return '<div class="card col" style="gap:4px"><p style="font-weight:600">Sueldo por mes</p>' + (e
+      ? '<input id="inc" type="text" inputmode="numeric" data-money value="' + P.fmtNum(S.income) + '" placeholder="$" style="margin-top:6px" autocomplete="off">' + tip + '<button class="mk-btn sm pri" style="margin-top:8px" data-a="editdone">Listo</button>'
+      : '<p class="mk-big">' + (S.income > 0 ? money(S.income) : 'Sin cargar') + '</p>' + tip + rowBtn('editsueldo', S.income > 0 ? 'Cambiar el sueldo' : 'Cargar el sueldo')) + '</div>';
+  }
+  function metaCard() {
+    C = P.calc(S);
+    var e = ui.edit === 'meta', tip = '<p class="mk-sub">Una buena primera meta es un mes de gastos fijos' + (C.fixedTotal > 0 ? ' (hoy: ' + money(C.fixedTotal) + ')' : '') + '.</p>';
+    return '<div class="card col" style="gap:4px"><p style="font-weight:600">Meta de ahorro</p>' + (e
+      ? '<input id="goalin" type="text" inputmode="numeric" data-money value="' + P.fmtNum(S.goal) + '" placeholder="$" style="margin-top:6px" autocomplete="off">' + tip + '<button class="mk-btn sm pri" style="margin-top:8px" data-a="editdone">Listo</button>'
+      : '<p class="mk-big">' + (S.goal > 0 ? money(S.goal) : 'Sin meta') + '</p>' + tip + rowBtn('editmeta', S.goal > 0 ? 'Cambiar la meta' : 'Definir la meta')) + '</div>';
   }
   function divBox() {
     C = P.calc(S);
@@ -207,35 +233,85 @@
     if (C.T > C.monthly) h += '<p class="mk-sub" style="margin-top:6px">Algunas usan su mínimo, por eso el total del mes sube a ' + money(C.T) + '.</p>';
     return h;
   }
-  function refreshPlan() { var a = $('#planBox'), b = $('#divBox'); if (a) a.innerHTML = planBox(); if (b) b.innerHTML = divBox(); }
-  function vPlan() {
-    var prevChip = S.prevIncome > 0 && !S.income ? '<button class="chip" style="margin-top:8px" data-a="useprev">Usar lo del mes pasado (' + money(S.prevIncome) + ')</button>' : '';
-    return '<div class="card"><label class="mk-lbl" for="inc">Lo que cobraste este mes</label><input id="inc" type="text" inputmode="numeric" data-money value="' + P.fmtNum(S.income) + '" placeholder="$" style="margin-top:6px" autocomplete="off"><p class="mk-sub">El sueldo cambia cada mes: cargá el total y el plan se recalcula.</p>' + prevChip + '</div><div class="card" id="planBox">' + planBox() + '</div><div class="card" id="divBox">' + divBox() + '</div>';
+  function divCard() {
+    if (ui.edit === 'reparto') return divBox() + '<button class="mk-btn sm pri" style="margin-top:12px" data-a="editdone">Listo</button>';
+    var h = '<p style="font-weight:600">Cómo se reparte entre tus deudas</p>';
+    if (!S.debts.some(P.isAct)) return h + '<p class="mk-sub">Cuando cargues deudas, acá ves cómo se reparte el pago.</p>';
+    return h + '<p class="mk-sub" style="margin-bottom:8px;font-size:13px">Primero los mínimos de cada una. Lo que sobra va a la que tiene más interés.</p><button class="mk-btn sm" data-a="suggest">Volver a sugerir el reparto</button>' + rowBtn('editreparto', 'Cambiarlo a mano');
+  }
+  function refreshPlan() { var a = $('#pctBox'), b = $('#divBox'); if (a) a.innerHTML = pctBox(pctMode()); if (b) b.innerHTML = divCard(); }
+  function vAjustes() {
+    C = P.calc(S);
+    return '<p class="mk-sub" style="font-size:13px">Se configura una vez y queda así.</p>' + sueldoCard() + '<div class="card" id="pctBox">' + pctBox(pctMode()) + '</div><div class="card" id="divBox">' + divCard() + '</div>' + metaCard() + backupBox();
+  }
+
+  // ---------- Primera vez: configuración guiada ----------
+  function vWizard() {
+    var s = ui.wiz, tip = '<p class="mk-sub">Si cambia mucho de un mes a otro, poné un monto que cobre seguro.</p>';
+    var h = '<div class="col" style="gap:8px"><p class="mk-sub" style="font-size:13px">Paso ' + s + ' de 3</p><div class="steps">' + [1, 2, 3].map(function (i) { return '<i' + (i <= s ? ' class="on"' : '') + '></i>'; }).join('') + '</div></div>';
+    if (s === 1) {
+      h += '<div><h2 class="wt">Tu sueldo y el reparto</h2><p class="mk-sub" style="font-size:14px;margin-top:4px">Cargá el sueldo y los porcentajes que acordaron. Después se cambian en Ajustes.</p></div>' +
+        '<div class="card col" style="gap:8px"><label for="inc" style="font-weight:600">Sueldo por mes</label><input id="inc" type="text" inputmode="numeric" data-money value="' + P.fmtNum(S.income) + '" placeholder="$" autocomplete="off">' + tip + '</div>' +
+        '<div class="card" id="pctBox">' + pctBox('wiz') + '</div><p id="err" style="font-size:13px;color:var(--bad)" hidden></p><button class="mk-btn pri big" data-a="wnext">Seguir</button>' +
+        '<div class="card col" style="gap:8px"><p style="font-weight:600">¿Ya tenés una copia guardada?</p>' + importBox() + '</div>';
+    } else if (s === 2) {
+      h += '<div><h2 class="wt">Meta de ahorro</h2><p class="mk-sub" style="font-size:14px;margin-top:4px">Es lo que quieren juntar como ahorro de emergencia. Una buena primera meta es un mes de gastos fijos. Se puede dejar para después.</p></div>' +
+        '<div class="card col" style="gap:8px"><label for="goalin" style="font-weight:600">Meta de ahorro</label><input id="goalin" type="text" inputmode="numeric" data-money value="' + P.fmtNum(S.goal) + '" placeholder="$" autocomplete="off"></div>' +
+        '<button class="mk-btn pri big" data-a="wnext">Seguir</button><button class="mk-btn" data-a="wback">Atrás</button>';
+    } else {
+      h += '<div><h2 class="wt">¡Listo!</h2><p class="mk-sub" style="font-size:14px;margin-top:4px">Ya está lo básico. Ahora falta cargar las deudas y los gastos fijos; con eso se arma el plan.</p></div>' +
+        '<button class="mk-btn pri big" data-a="wdeudas">Cargar las deudas</button><button class="mk-btn" data-a="wfin">Ir al inicio</button>';
+    }
+    return h;
   }
 
   // ---------- Deudas ----------
+  function debtForm() {
+    var ed = ui.form.id ? find(S.debts, ui.form.id) : null;
+    var d = ed || { n: '', b: '', min: '', rate: 0, rt: 'm', rv: 0, due: '', late: '', paid: 0, bank: '' };
+    var rt = d.rt || 'm', rv = d.rv || d.rate || '';
+    return '<div class="card col" style="gap:10px"><p style="font-weight:600">' + (ed ? 'Editar deuda' : 'Nueva deuda') + '</p><label class="lbl13" for="f-name">¿A quién le debés?</label><input id="f-name" type="text" maxlength="80" placeholder="Ej: Tarjeta Visa" value="' + esc(d.n) + '" autocomplete="off"><label class="lbl13" for="f-amt">¿Cuánto debés hoy?</label><input id="f-amt" type="text" inputmode="numeric" data-money placeholder="$ 50.000" value="' + P.fmtNum(d.b) + '" autocomplete="off">' +
+      (ed ? '<label class="lbl13" for="f-paid">Lo que ya pagaste este mes</label><input id="f-paid" type="text" inputmode="numeric" data-money placeholder="$ 0" value="' + P.fmtNum(d.paid) + '" autocomplete="off">' : '') +
+      '<label class="lbl13" for="f-min">Pago mínimo por mes (opcional)</label><input id="f-min" type="text" inputmode="numeric" data-money placeholder="$ 5.000" value="' + P.fmtNum(d.min) + '" autocomplete="off"><p class="mk-sub">Si lo dejás vacío se usa el 10% de lo que debés.</p>' +
+      '<label class="lbl13" for="f-rtype">Interés (opcional): ¿qué dato te da el banco?</label><select id="f-rtype"><option value="m"' + (rt === 'm' ? ' selected' : '') + '>Interés por mes</option><option value="tna"' + (rt === 'tna' ? ' selected' : '') + '>TNA (anual)</option><option value="tea"' + (rt === 'tea' ? ' selected' : '') + '>TEA (anual efectiva)</option></select><input id="f-rate" type="text" inputmode="decimal" placeholder="Ej: 6" value="' + (rv ? rateTxt(rv) : '') + '" aria-label="Porcentaje de interés" autocomplete="off"><p class="mk-sub" id="rate-out">El banco suele informar TNA o TEA. Elegí cuál y se convierte a interés por mes.</p>' +
+      '<label class="lbl13" for="f-due">Día de vencimiento (opcional)</label><input id="f-due" type="text" inputmode="numeric" placeholder="1 a 31" value="' + (d.due || '') + '" autocomplete="off"><label class="lbl13" for="f-late">Recargo si se paga tarde, en % (opcional)</label><input id="f-late" type="text" inputmode="decimal" placeholder="Ej: 10" value="' + (d.late ? rateTxt(d.late) : '') + '" autocomplete="off"><p class="mk-sub">Es una estimación sobre lo que falte pagar. El monto real lo informa el banco en el resumen.</p>' +
+      '<label class="lbl13" for="f-bank">Banco o entidad (opcional)</label><input id="f-bank" type="text" maxlength="40" placeholder="Ej: Banco Galicia" value="' + esc(d.bank || '') + '" autocomplete="off">' +
+      '<p id="err" style="font-size:13px;color:var(--bad)" hidden></p><div class="g2" style="gap:8px"><button class="mk-btn pri" data-a="saveform">Guardar</button><button class="mk-btn" data-a="cancelform">Cancelar</button></div></div>';
+  }
+  function kv(l, v, st) { return '<div class="kv"><span>' + l + '</span><b' + (st ? ' style="' + st + '"' : '') + '>' + v + '</b></div>'; }
+  function debtDetail(d) {
+    var t = C.t[d.id] || 0, li = P.lateInfo(S, C, d, new Date());
+    var pc = t > 0 ? Math.min(100, Math.round(Math.min(d.paid, t) / t * 100)) : 100;
+    var vence = d.due ? 'el día ' + d.due + (li && li.over ? ' (vencida)' : li && li.dd <= 5 ? ' (' + P.whenText(li.dd) + ')' : '') : 'Sin fecha cargada';
+    var h = '<button class="back" data-a="back">' + ic('back', 18) + 'Deudas</button><h2 class="dname">' + esc(d.n) + '</h2>';
+    h += '<div class="card"><p class="mk-lbl">Debés</p><p class="mk-big">' + (d.b > 0 ? money(d.b) : 'Saldada') + '</p>' + (t > 0 ? '<div class="mk-bar lg"><i style="width:' + pc + '%;background:var(--accent)"></i></div><p class="mk-sub" style="font-size:13px;margin-top:6px">Este mes pagaste ' + money(Math.min(d.paid, t)) + ' de ' + money(t) + '.</p>' : '') + '</div>';
+    h += dueHtml(d);
+    h += '<div class="card kvs">' + kv('Vence', vence, li && (li.over || li.dd <= 5) ? 'color:' + (li.over ? 'var(--bad)' : 'var(--warn)') : '') + kv('Pago mínimo', money(d.min)) + kv('Interés', d.rate ? rateTxt(d.rate) + '% por mes (unos ' + money(d.b * d.rate / 100) + ')' : 'Sin interés') + kv('Recargo si se paga tarde', d.late ? rateTxt(d.late) + '%' : 'Sin recargo') + kv('Banco', d.bank ? esc(d.bank) : 'Sin cargar') + '</div>';
+    if (d.b > 0) h += '<button class="mk-btn pri" data-a="paydebt">' + ic('check', 18) + 'Pagué esta deuda</button>' + panelHtml();
+    if (ui.del === d.id) h += '<div class="g2" style="gap:8px"><button class="mk-btn sm danger" data-a="delyes" data-i="' + esc(d.id) + '">Sí, borrar</button><button class="mk-btn sm" data-a="delno">No</button></div>';
+    else h += '<div class="g2" style="gap:8px"><button class="mk-btn" data-a="edit" data-i="' + esc(d.id) + '">Editar</button><button class="mk-btn danger" data-a="del" data-i="' + esc(d.id) + '">Borrar</button></div>';
+    return h;
+  }
   function vDeudas() {
     C = P.calc(S);
-    var h = '';
-    if (ui.form) {
-      var ed = ui.form.id ? find(S.debts, ui.form.id) : null;
-      var d = ed || { n: '', b: '', min: '', rate: 0, rt: 'm', rv: 0, due: '', late: '', paid: 0 };
-      var rt = d.rt || 'm', rv = d.rv || d.rate || '';
-      h += '<div class="card col" style="gap:10px"><p style="font-weight:600">' + (ed ? 'Editar deuda' : 'Nueva deuda') + '</p><label class="lbl13" for="f-name">¿A quién le debés?</label><input id="f-name" type="text" maxlength="80" placeholder="Ej: Tarjeta Visa" value="' + esc(d.n) + '" autocomplete="off"><label class="lbl13" for="f-amt">¿Cuánto debés hoy?</label><input id="f-amt" type="text" inputmode="numeric" data-money placeholder="$ 50.000" value="' + P.fmtNum(d.b) + '" autocomplete="off">' +
-        (ed ? '<label class="lbl13" for="f-paid">Lo que ya pagaste este mes</label><input id="f-paid" type="text" inputmode="numeric" data-money placeholder="$ 0" value="' + P.fmtNum(d.paid) + '" autocomplete="off">' : '') +
-        '<label class="lbl13" for="f-min">Pago mínimo por mes (opcional)</label><input id="f-min" type="text" inputmode="numeric" data-money placeholder="$ 5.000" value="' + P.fmtNum(d.min) + '" autocomplete="off"><p class="mk-sub">Si lo dejás vacío se usa el 10% de lo que debés.</p>' +
-        '<label class="lbl13" for="f-rtype">Interés (opcional): ¿qué dato te da el banco?</label><select id="f-rtype"><option value="m"' + (rt === 'm' ? ' selected' : '') + '>Interés por mes</option><option value="tna"' + (rt === 'tna' ? ' selected' : '') + '>TNA (anual)</option><option value="tea"' + (rt === 'tea' ? ' selected' : '') + '>TEA (anual efectiva)</option></select><input id="f-rate" type="text" inputmode="decimal" placeholder="Ej: 6" value="' + (rv ? rateTxt(rv) : '') + '" aria-label="Porcentaje de interés" autocomplete="off"><p class="mk-sub" id="rate-out">El banco suele informar TNA o TEA. Elegí cuál y se convierte a interés por mes.</p>' +
-        '<label class="lbl13" for="f-due">Día de vencimiento (opcional)</label><input id="f-due" type="text" inputmode="numeric" placeholder="1 a 31" value="' + (d.due || '') + '" autocomplete="off"><label class="lbl13" for="f-late">Recargo si se paga tarde, en % (opcional)</label><input id="f-late" type="text" inputmode="decimal" placeholder="Ej: 10" value="' + (d.late ? rateTxt(d.late) : '') + '" autocomplete="off"><p class="mk-sub">Es una estimación sobre lo que falte pagar. El monto real lo informa el banco en el resumen.</p><p id="err" style="font-size:13px;color:var(--bad)" hidden></p><div class="g2" style="gap:8px"><button class="mk-btn pri" data-a="saveform">Guardar</button><button class="mk-btn" data-a="cancelform">Cancelar</button></div></div>';
+    if (ui.form) return debtForm();
+    var det = ui.detail ? find(S.debts, ui.detail) : null;
+    if (det) return debtDetail(det);
+    ui.detail = null;
+    var tot = sum(S.debts, function (d) { return d.b; }), h = '';
+    if (!S.debts.length) h += '<div class="card"><p>Todavía no cargaste deudas.</p><p class="mk-sub">Agregá la primera para ver cuándo terminás.</p></div>';
+    else {
+      h += '<div class="card"><p class="mk-lbl">Debés en total</p><p class="mk-big">' + money(tot) + '</p></div><p class="mk-sub" style="font-size:13px">Tocá una para ver el detalle.</p>';
+      S.debts.forEach(function (d) {
+        var li = P.lateInfo(S, C, d, new Date()), st;
+        if (d.b === 0) st = 'Saldada';
+        else if (li && li.over) st = '<span style="color:var(--bad);font-weight:600">Vencida</span>';
+        else if (li && li.dd <= 5) st = '<span style="color:var(--warn);font-weight:600">Vence ' + P.whenText(li.dd) + '</span>';
+        else st = d.due ? 'Vence el día ' + d.due : 'Mínimo ' + money(d.min) + ' por mes';
+        h += '<button class="card drow" data-a="open" data-i="' + esc(d.id) + '"><span class="nm">' + esc(d.n) + '<span class="sm">' + st + '</span></span><b class="amt">' + (d.b > 0 ? money(d.b) : '') + '</b>' + ic('chevron', 18, 'var(--faint)') + '</button>';
+      });
     }
-    if (!S.debts.length && !ui.form) h += '<div class="card"><p>Todavía no cargaste deudas.</p><p class="mk-sub">Agregá la primera para ver cuándo terminás.</p></div>';
-    S.debts.forEach(function (d) {
-      h += '<div class="card col" style="gap:8px"><div style="display:flex;justify-content:space-between;gap:8px"><span style="min-width:0;overflow-wrap:anywhere;font-weight:600">' + esc(d.n) + '</span><span style="white-space:nowrap;font-weight:600;font-variant-numeric:tabular-nums">' + (d.b > 0 ? money(d.b) : 'Saldada') + '</span></div><p class="mk-sub" style="margin:0">Mínimo ' + money(d.min) + ' por mes · ' + (d.rate ? 'interés ' + rateTxt(d.rate) + '% (unos ' + money(d.b * d.rate / 100) + ' al mes)' : 'sin interés') + (d.due ? ' · vence el día ' + d.due : '') + ' · pagaste ' + money(d.paid) + ' este mes</p>' + dueHtml(d);
-      if (ui.del === d.id) h += '<div class="g2" style="gap:8px"><button class="mk-btn sm danger" data-a="delyes" data-i="' + esc(d.id) + '">Sí, borrar</button><button class="mk-btn sm" data-a="delno">No</button></div>';
-      else h += '<div class="g2" style="gap:8px"><button class="mk-btn sm" data-a="edit" data-i="' + esc(d.id) + '">Editar</button><button class="mk-btn sm" data-a="del" data-i="' + esc(d.id) + '">Borrar</button></div>';
-      h += '</div>';
-    });
-    if (!ui.form) h += '<button class="mk-btn" data-a="new">' + ic('plus', 18) + 'Nueva deuda</button><p class="mk-sub" style="text-align:center">Cuando te llegue un resumen, corregí el saldo con Editar.</p>';
-    return h;
+    return h + '<button class="mk-btn" data-a="new">' + ic('plus', 18) + 'Nueva deuda</button>';
   }
   function rateOut() {
     var el = $('#rate-out'); if (!el) return;
@@ -289,21 +365,22 @@
   function vAhorro() {
     C = P.calc(S);
     var p = S.goal > 0 ? Math.min(100, Math.round(S.saved / S.goal * 100)) : 0;
-    var h = '<div class="card"><p class="mk-lbl">Colchón de emergencia</p><p class="mk-big">' + money(S.saved) + '</p><div class="mk-bar"><i style="width:' + p + '%;background:var(--good)"></i></div><p class="mk-sub">' + (S.goal > 0 ? p + '% de la meta' : 'Definí una meta para ver el avance') + '</p></div>';
-    h += '<div class="card"><label class="mk-lbl" for="goalin">Meta del colchón</label><input id="goalin" type="text" inputmode="numeric" data-money value="' + P.fmtNum(S.goal) + '" placeholder="$" style="margin-top:6px" autocomplete="off"><p class="mk-sub">Una buena primera meta es un mes de gastos fijos' + (C.fixedTotal > 0 ? ' (hoy: ' + money(C.fixedTotal) + ')' : '') + '.</p></div>';
-    h += '<div class="card"><p class="mk-lbl">Este mes</p><p class="mk-big">' + money(S.savedMonth) + (C.sAmt > 0 ? ' de ' + money(C.sAmt) : '') + '</p>' + (C.full ? '<p class="mk-sub">El colchón llegó a la meta: el ahorro pasa a deudas.</p>' : '') + '</div>';
+    var h = '<div class="card"><p class="mk-lbl">Ahorro</p><p class="mk-big">' + money(S.saved) + '</p><div class="mk-bar"><i style="width:' + p + '%;background:var(--good)"></i></div><p class="mk-sub">' + (S.goal > 0 ? p + '% de la meta' : 'Definí una meta para ver el avance') + '</p></div>';
+    h += '<div class="card"><p class="mk-lbl">Meta de ahorro</p><p class="mk-big">' + (S.goal > 0 ? money(S.goal) : 'Sin meta') + '</p><button class="lnk" style="padding-left:0" data-a="tab" data-t="ajustes">' + (S.goal > 0 ? 'Cambiar la meta en Ajustes' : 'Definir la meta en Ajustes') + '</button></div>';
+    h += '<div class="card"><p class="mk-lbl">Este mes</p><p class="mk-big">' + money(S.savedMonth) + (C.sAmt > 0 ? ' de ' + money(C.sAmt) : '') + '</p>' + (C.full ? '<p class="mk-sub">El ahorro llegó a la meta: el porcentaje de ahorro pasa a deudas.</p>' : '') + '</div>';
     h += '<button class="mk-btn pri" data-a="save">' + ic('coin', 18) + 'Aparté</button>' + panelHtml();
-    if (ui.aform) h += '<div class="card col" style="gap:10px"><p style="font-weight:600">Corregir montos</p><label class="lbl13" for="f-saved">Colchón total</label><input id="f-saved" type="text" inputmode="numeric" data-money value="' + P.fmtNum(S.saved) + '" placeholder="$ 0" autocomplete="off"><label class="lbl13" for="f-sm">Apartado este mes</label><input id="f-sm" type="text" inputmode="numeric" data-money value="' + P.fmtNum(S.savedMonth) + '" placeholder="$ 0" autocomplete="off"><div class="g2" style="gap:8px"><button class="mk-btn pri" data-a="asave">Guardar</button><button class="mk-btn" data-a="acancel">Cancelar</button></div></div>';
+    if (ui.aform) h += '<div class="card col" style="gap:10px"><p style="font-weight:600">Corregir montos</p><label class="lbl13" for="f-saved">Ahorro total</label><input id="f-saved" type="text" inputmode="numeric" data-money value="' + P.fmtNum(S.saved) + '" placeholder="$ 0" autocomplete="off"><label class="lbl13" for="f-sm">Apartado este mes</label><input id="f-sm" type="text" inputmode="numeric" data-money value="' + P.fmtNum(S.savedMonth) + '" placeholder="$ 0" autocomplete="off"><div class="g2" style="gap:8px"><button class="mk-btn pri" data-a="asave">Guardar</button><button class="mk-btn" data-a="acancel">Cancelar</button></div></div>';
     else h += '<button class="mk-btn sm" data-a="aedit">Corregir montos</button>';
     return h;
   }
 
-  var VIEWS = { inicio: vInicio, plan: vPlan, deudas: vDeudas, fijos: vGastos, ahorro: vAhorro };
+  var VIEWS = { inicio: vInicio, deudas: vDeudas, fijos: vGastos, ahorro: vAhorro, ajustes: vAjustes };
   function render() {
+    var wiz = !S.setup || ui.fin;
     $('#sub').textContent = cap(P.monthName(S.month)) + ' ' + S.month.slice(0, 4);
-    $('#tabs').innerHTML = TABS.map(function (t) { return '<button data-a="tab" data-t="' + t[0] + '"' + (tab === t[0] ? ' aria-current="page"' : '') + '>' + ic(t[2], 22) + t[1] + '</button>'; }).join('');
-    $('#view').innerHTML = VIEWS[tab]();
-    var det = $('#bk'); if (det) det.addEventListener('toggle', function () { ui.det = det.open; });
+    $('nav').hidden = wiz;
+    $('#tabs').innerHTML = wiz ? '' : TABS.map(function (t) { return '<button data-a="tab" data-t="' + t[0] + '"' + (tab === t[0] ? ' aria-current="page"' : '') + '>' + ic(t[2], 22) + t[1] + '</button>'; }).join('');
+    $('#view').innerHTML = wiz ? vWizard() : VIEWS[tab]();
   }
   // Se enfoca dentro del mismo toque: iOS solo abre el teclado si el foco se pide desde el gesto.
   function focusFirst() { var e = document.querySelector('#panel input, #view .card input[type=text]'); if (e) e.focus(); }
@@ -341,17 +418,18 @@
     fr.onload = function () {
       try { ui.imp = { S: B.fromCSV(fr.result), name: file.name }; ui.impErr = null; }
       catch (e) { ui.imp = null; ui.impErr = e.message; }
-      ui.det = true; render();
+      render();
     };
-    fr.onerror = function () { ui.imp = null; ui.impErr = 'No se pudo leer el archivo.'; ui.det = true; render(); };
+    fr.onerror = function () { ui.imp = null; ui.impErr = 'No se pudo leer el archivo.'; render(); };
     fr.readAsText(file);
   }
 
   // ---------- acciones ----------
   var A = {
     tab: function (b) { resetUi(); ui.sub = 'fijos'; tab = b.dataset.t; hideToast(); render(); window.scrollTo(0, 0); },
-    pay: function () { if (!S.debts.some(function (d) { return d.b > 0; })) { toast('No hay deudas pendientes'); return; } if (tab !== 'inicio') { resetUi(); tab = 'inicio'; } ui.panel = 'pay'; render(); window.scrollTo(0, 0); focusFirst(); },
-    save: function () { ui.panel = 'save'; render(); focusFirst(); },
+    pay: function () { if (!S.debts.some(function (d) { return d.b > 0; })) { toast('No hay deudas pendientes'); return; } if (tab !== 'inicio') { resetUi(); tab = 'inicio'; } ui.panel = 'pay'; ui.payDebt = null; render(); window.scrollTo(0, 0); focusFirst(); },
+    paydebt: function () { ui.panel = 'pay'; ui.payDebt = ui.detail; render(); focusFirst(); },
+    save: function () { if (tab !== 'ahorro') { resetUi(); tab = 'ahorro'; } ui.panel = 'save'; render(); window.scrollTo(0, 0); focusFirst(); },
     no: function () { ui.panel = null; render(); },
     ok: function () {
       var a = amt($('#f-amt').value);
@@ -368,7 +446,7 @@
         S.saved += a; S.savedMonth += a;
         commit('ahorro', { monto: a });
         undoInfo = { t: 'ahorro', amt: a };
-        toast(syncGoal() ? '¡Llegaste a la meta! El ahorro pasa a deudas.' : 'Ahorro anotado', true);
+        toast(syncGoal() ? '¡Llegaste a la meta de ahorro! El porcentaje de ahorro pasa a deudas.' : 'Ahorro anotado', true);
       }
       ui.panel = null; render();
     },
@@ -378,7 +456,6 @@
       else { S.saved = Math.max(0, S.saved - u.amt); S.savedMonth = Math.max(0, S.savedMonth - u.amt); syncGoal(); commit('deshacer', { de: 'ahorro', monto: u.amt }); }
       render(); toast('Deshecho');
     },
-    useprev: function () { S.income = S.prevIncome; commit('ingreso', { antes: 0, despues: S.income }); render(); },
     step: function (b) { var k = b.dataset.k; setPct(k, (k === 'dp' ? S.dp : S.sp) + parseInt(b.dataset.d, 10)); },
     sh: function (b) {
       var me = find(S.debts, b.dataset.i), d = parseInt(b.dataset.d, 10); if (!me) return;
@@ -433,31 +510,34 @@
       var rate = rv > 0 ? P.toMonthly(rt, rv) : 0;
       var due = Math.max(0, Math.min(31, parseInt($('#f-due').value, 10) || 0));
       var lt = parseFloat(String($('#f-late').value).replace(',', '.')); lt = isFinite(lt) && lt > 0 ? Math.min(lt, 1000) : 0;
+      var bank = $('#f-bank').value.trim().slice(0, 40);
       var ed = ui.form.id ? find(S.debts, ui.form.id) : null;
       if (!nm) return fail('Poné el nombre.');
       if (!ed && !a) return fail('Poné cuánto debés.');
       if (ed) {
         var antes = dsnap(ed), paid = $('#f-paid') ? amt($('#f-paid').value) : ed.paid;
-        ed.n = nm; ed.b = a; ed.paid = paid; ed.min = m || ed.min; ed.rate = rate; ed.rt = rt; ed.rv = rv; ed.due = due; ed.late = lt;
+        ed.bank = bank; ed.n = nm; ed.b = a; ed.paid = paid; ed.min = m || ed.min; ed.rate = rate; ed.rt = rt; ed.rv = rv; ed.due = due; ed.late = lt;
         var despues = dsnap(ed);
         if (JSON.stringify(antes) !== JSON.stringify(despues)) commit('deuda_edicion', { n: nm, antes: antes, despues: despues });
         else persist();
         toast('Deuda guardada');
       } else {
-        var nd = { id: P.uid(), n: nm, b: a, min: m || Math.round(a * 0.1), rate: rate, rt: rt, rv: rv, due: due, late: lt, paid: 0, share: 0 };
+        var nd = { id: P.uid(), n: nm, b: a, min: m || Math.round(a * 0.1), rate: rate, rt: rt, rv: rv, due: due, late: lt, paid: 0, share: 0, bank: bank };
         S.debts.push(nd);
-        commit('deuda_alta', { n: nm, b: a, min: nd.min, rate: rate, due: due, late: lt });
+        commit('deuda_alta', { n: nm, b: a, min: nd.min, rate: rate, due: due, late: lt, bank: bank });
         resplit('deuda nueva');
-        toast('Deuda guardada. Repartí el pago de nuevo; podés ajustarlo en Plan.');
+        toast('Deuda guardada. Repartí el pago de nuevo; podés ajustarlo en Ajustes.');
       }
       ui.form = null; render();
     },
+    open: function (b) { ui.detail = b.dataset.i; ui.panel = null; ui.del = null; render(); window.scrollTo(0, 0); },
+    back: function () { ui.detail = null; ui.panel = null; ui.del = null; render(); window.scrollTo(0, 0); },
     del: function (b) { ui.del = b.dataset.i; render(); },
     delno: function () { ui.del = null; render(); },
     delyes: function (b) {
       var d = find(S.debts, b.dataset.i);
       if (d) { S.debts.splice(S.debts.indexOf(d), 1); commit('deuda_baja', { n: d.n, b: d.b }); if (S.debts.some(P.isAct)) resplit('deuda borrada'); }
-      ui.del = null; toast('Deuda borrada'); render();
+      ui.del = null; ui.detail = null; toast('Deuda borrada'); render(); window.scrollTo(0, 0);
     },
     aedit: function () { ui.aform = true; render(); focusFirst(); },
     acancel: function () { ui.aform = false; render(); },
@@ -467,18 +547,30 @@
       if (antes.colchon !== n1 || antes.mes !== n2) commit('ahorro_ajuste', { antes: antes, despues: { colchon: n1, mes: n2 } }); else persist();
       ui.aform = false; toast('Ahorro corregido'); render();
     },
+    editsueldo: function () { ui.edit = 'sueldo'; render(); focusFirst(); },
+    editpct: function () { ui.edit = 'pct'; render(); },
+    editreparto: function () { ui.edit = 'reparto'; render(); },
+    editmeta: function () { ui.edit = 'meta'; render(); focusFirst(); },
+    editdone: function () { flushAll(); ui.edit = null; render(); },
+    wnext: function () {
+      if (ui.wiz === 1) { if (S.income <= 0) return fail('Poné el sueldo para seguir.'); flushAll(); ui.wiz = 2; render(); window.scrollTo(0, 0); }
+      else { flushAll(); S.setup = true; ui.fin = true; ui.wiz = 3; commit('config_inicial', { sueldo: S.income, dp: S.dp, sp: S.sp, meta: S.goal }); render(); window.scrollTo(0, 0); }
+    },
+    wback: function () { ui.wiz = Math.max(1, ui.wiz - 1); render(); window.scrollTo(0, 0); },
+    wdeudas: function () { resetUi(); tab = 'deudas'; ui.form = { id: null }; render(); window.scrollTo(0, 0); focusFirst(); },
+    wfin: function () { resetUi(); tab = 'inicio'; render(); window.scrollTo(0, 0); },
     hint: function () { lsSet('pdd:hint', '1'); render(); },
     flash: function () { S.flash = null; persist(); render(); },
     hideDemo: function () { S.demo = false; persist(); render(); },
-    clearDemo: function () { var n = new Date(); S = P.blank(n); persist(); resetUi(); render(); toast('Listo. Empezá cargando lo que cobraste en Plan.'); },
+    clearDemo: function () { var n = new Date(); S = P.blank(n); persist(); resetUi(); render(); toast('Listo, empezás de cero'); },
     share: function () { doShare(true); },
-    backup: function () { if (tab !== 'inicio') { resetUi(); tab = 'inicio'; render(); } doShare(false); },
+    backup: function () { doShare(false); },
     impno: function () { ui.imp = null; ui.impErr = null; render(); },
     impyes: function () {
       var next = ui.imp.S, name = ui.imp.name; P.logEv(next, 'importacion', { desde: name });
       S = next; var r = P.rollover(S, new Date()); persist(); resetUi(); render(); toast(r && r.interest > 0 ? 'Copia restaurada. Empezó un mes nuevo.' : 'Copia restaurada');
     },
-    rst: function () { ui.rst = true; ui.det = true; render(); },
+    rst: function () { ui.rst = true; render(); window.scrollTo(0, document.body.scrollHeight); },
     rstno: function () { ui.rst = false; render(); },
     rstyes: function () { S = P.blank(new Date()); persist(); resetUi(); tab = 'inicio'; render(); window.scrollTo(0, 0); toast('Empezaste de cero'); }
   };
@@ -516,12 +608,12 @@
     if (document.visibilityState === 'hidden') { flushAll(); return; }
     var r = P.rollover(S, new Date());
     if (r) { persist(); render(); return; }
-    if (!(ui.panel || ui.form || ui.fform || ui.xform || ui.aform || ui.imp || ui.rst)) render();
+    if (!(ui.panel || ui.form || ui.fform || ui.xform || ui.aform || ui.imp || ui.rst || ui.edit || ui.fin || !S.setup)) render();
   });
   window.addEventListener('pagehide', function () { if (S) flushAll(); });
 
   // ---------- inicio ----------
-  ST.onStatus(function (ok) { if (ok !== storeOk) { storeOk = ok; if (S && tab === 'inicio') render(); } });
+  ST.onStatus(function (ok) { if (ok !== storeOk) { storeOk = ok; if (S && tab === 'inicio' && S.setup && !ui.fin) render(); } });
   ST.load().then(function (loaded) {
     var now = new Date();
     S = loaded || P.demo(now);

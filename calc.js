@@ -34,7 +34,7 @@
 
   function blank(now) {
     return {
-      v: 1, updatedAt: 0, month: monthKey(now), income: 0, prevIncome: 0, dp: 20, sp: 10,
+      v: 1, updatedAt: 0, month: monthKey(now), income: 0, prevIncome: 0, dp: 20, sp: 10, setup: false,
       goal: 0, saved: 0, savedMonth: 0, goalHit: false, demo: false, lastBackup: 0, flash: null,
       debts: [], fixed: [], extras: [], hist: [], log: []
     };
@@ -42,11 +42,11 @@
 
   function demo(now) {
     var S = blank(now), d = now.getDate(), dim = daysInMonth(now), k = S.month;
-    S.demo = true; S.income = 600000; S.dp = 20; S.sp = 10; S.saved = 40000; S.goal = 280000; S.savedMonth = 20000;
+    S.demo = true; S.setup = true; S.income = 600000; S.dp = 20; S.sp = 10; S.saved = 40000; S.goal = 280000; S.savedMonth = 20000;
     S.debts = [
-      { id: 'd1', n: 'Tarjeta', b: 155000, min: 25000, rate: 6, rt: 'm', rv: 6, due: Math.max(1, d - 1), late: 10, paid: 25000, share: 40 },
-      { id: 'd2', n: 'Préstamo de un amigo', b: 60000, min: 15000, rate: 0, rt: 'm', rv: 0, due: 20, late: 0, paid: 0, share: 25 },
-      { id: 'd3', n: 'Cuotas electrodoméstico', b: 90000, min: 20000, rate: 3, rt: 'm', rv: 3, due: Math.min(dim, d + 1), late: 5, paid: 0, share: 35 }
+      { id: 'd1', n: 'Tarjeta', b: 155000, min: 25000, rate: 6, rt: 'm', rv: 6, due: Math.max(1, d - 1), late: 10, paid: 25000, share: 40, bank: '' },
+      { id: 'd2', n: 'Préstamo de un amigo', b: 60000, min: 15000, rate: 0, rt: 'm', rv: 0, due: 20, late: 0, paid: 0, share: 25, bank: '' },
+      { id: 'd3', n: 'Cuotas electrodoméstico', b: 90000, min: 20000, rate: 3, rt: 'm', rv: 3, due: Math.min(dim, d + 1), late: 5, paid: 0, share: 35, bank: '' }
     ];
     S.fixed = [
       { id: 'f1', n: 'Alquiler', a: 200000 }, { id: 'f2', n: 'Servicios (luz, gas, agua)', a: 45000 },
@@ -145,23 +145,23 @@
     var tot = sum(S.debts, function (d) { return d.b; });
     var prev = S.hist.length ? S.hist[S.hist.length - 1].total : null;
     var sim = simulate(S, C);
-    if (S.income <= 0) L.push({ lv: 'warn', t: 'Todavía no cargaste lo que cobraste este mes. Sin eso no se puede calcular el plan.', a: 'tab', d: 'plan', al: 'Cargar ingreso' });
+    if (S.income <= 0) L.push({ lv: 'warn', t: 'Todavía no cargaste tu sueldo. Sin eso no se puede calcular el plan.', a: 'tab', d: 'ajustes', al: 'Cargar sueldo' });
     S.debts.forEach(function (d) {
       var li = lateInfo(S, C, d, now); if (!li) return;
       if (li.over) L.push({ lv: 'bad', t: d.n + ' venció el día ' + d.due + '. Faltan ' + fmt(li.left) + ' del pago del mes' + (li.extra > 0 ? ' y el banco puede sumar unos ' + fmt(li.extra) + ' de recargo (serían ' + fmt(li.left + li.extra) + ').' : '.'), a: 'pay', al: 'Registrar pago' });
       else if (li.dd <= 5) L.push({ lv: 'warn', t: d.n + ' vence ' + whenText(li.dd) + '. Faltan ' + fmt(li.left) + (li.extra > 0 ? '. Si no se paga a tiempo, se sumarían unos ' + fmt(li.extra) + ' de recargo.' : '.'), a: 'pay', al: 'Registrar pago' });
     });
-    if (S.income > 0 && C.free < 0) L.push({ lv: 'bad', t: 'Los gastos fijos, los extras y el plan superan lo que cobraste por ' + fmt(-C.free) + '.', a: 'tab', d: 'plan', al: 'Ajustar el plan' });
+    if (S.income > 0 && C.free < 0) L.push({ lv: 'bad', t: 'Los gastos fijos, los extras y el plan superan lo que cobraste por ' + fmt(-C.free) + '.', a: 'tab', d: 'ajustes', al: 'Ajustar el plan' });
     if (S.income > 0 && C.extraTotal > S.income * 0.15) L.push({ lv: 'warn', t: 'Los gastos extras de este mes suman ' + fmt(C.extraTotal) + ' (' + Math.round(C.extraTotal / S.income * 100) + '% de lo que cobraste). Si el mes viene justo, conviene posponer alguno.', a: 'xgo', al: 'Ver extras' });
-    if (C.short) L.push({ lv: 'warn', t: 'El porcentaje de deudas no alcanza para los pagos mínimos (' + fmt(C.sumMin) + ').', a: 'tab', d: 'plan', al: 'Ajustar el plan' });
-    if (tot > 0 && S.income > 0 && !sim.ok) L.push({ lv: 'bad', t: 'Con este plan la deuda no baja: el pago no cubre los intereses.', a: 'tab', d: 'plan', al: 'Ajustar el plan' });
+    if (C.short) L.push({ lv: 'warn', t: 'El porcentaje de deudas no alcanza para los pagos mínimos (' + fmt(C.sumMin) + ').', a: 'tab', d: 'ajustes', al: 'Ajustar el plan' });
+    if (tot > 0 && S.income > 0 && !sim.ok) L.push({ lv: 'bad', t: 'Con este plan la deuda no baja: el pago no cubre los intereses.', a: 'tab', d: 'ajustes', al: 'Ajustar el plan' });
     if (prev !== null && tot > prev && day >= 10) L.push({ lv: 'bad', t: 'La deuda subió ' + fmt(tot - prev) + ' respecto del cierre del mes pasado. Revisá si sumaste deudas o si los intereses superan lo que pagaste.' });
     if (C.T > 0 && C.T - C.Pd > 0) {
       var left = dim - day;
       if (left <= 5) L.push({ lv: 'warn', t: 'Quedan ' + left + (left === 1 ? ' día' : ' días') + ' del mes y faltan ' + fmt(C.T - C.Pd) + ' para cerrar el pago.', a: 'pay', al: 'Registrar pago' });
       else if (day >= 10 && C.Pd / C.T < frac - 0.25) L.push({ lv: 'warn', t: 'El pago del mes va lento: llevás el ' + Math.round(C.Pd / C.T * 100) + '% y ya pasó el ' + Math.round(frac * 100) + '% del mes.', a: 'pay', al: 'Registrar pago' });
     }
-    if (!C.full && C.sAmt > 0 && day >= 15 && S.savedMonth < C.sAmt * frac - C.sAmt * 0.25) L.push({ lv: 'warn', t: 'Falta apartar ' + fmt(C.sAmt - S.savedMonth) + ' para el colchón de este mes.', a: 'save', al: 'Anotar ahorro' });
+    if (!C.full && C.sAmt > 0 && day >= 15 && S.savedMonth < C.sAmt * frac - C.sAmt * 0.25) L.push({ lv: 'warn', t: 'Falta apartar ' + fmt(C.sAmt - S.savedMonth) + ' para el ahorro de este mes.', a: 'save', al: 'Anotar ahorro' });
     L.sort(function (x, y) { return (x.lv === 'bad' ? 0 : 1) - (y.lv === 'bad' ? 0 : 1); });
     L = L.slice(0, 4);
     if (!S.demo && S.log.length >= 5 && L.length < 4) {
@@ -186,8 +186,7 @@
         }
         d.paid = 0;
       });
-      if (S.income > 0) S.prevIncome = S.income;
-      S.income = 0; S.savedMonth = 0;
+      S.savedMonth = 0; // el sueldo es fijo: se carga una vez y no se reinicia
       S.month = monthAdd(S.month, 1);
       logEv(S, 'mes_nuevo', { mes: S.month, intereses: items }, now.getTime());
       months++;
@@ -229,7 +228,7 @@
     var S = {
       v: 1, updatedAt: num(raw.updatedAt, 0, 8.64e15, 0),
       month: /^\d{4}-(0[1-9]|1[0-2])$/.test(raw.month) ? raw.month : monthKey(now),
-      income: int(raw.income), prevIncome: int(raw.prevIncome), dp: Math.round(num(raw.dp, 0, 100, 20)), sp: Math.round(num(raw.sp, 0, 100, 10)),
+      income: int(raw.income), prevIncome: int(raw.prevIncome), setup: false, dp: Math.round(num(raw.dp, 0, 100, 20)), sp: Math.round(num(raw.sp, 0, 100, 10)),
       goal: int(raw.goal), saved: int(raw.saved), savedMonth: int(raw.savedMonth), goalHit: !!raw.goalHit, demo: !!raw.demo,
       lastBackup: num(raw.lastBackup, 0, 8.64e15, 0),
       flash: raw.flash && typeof raw.flash === 'object' ? { interest: int(raw.flash.interest), months: int(raw.flash.months) } : null,
@@ -240,7 +239,7 @@
       return {
         id: str(d.id, 30), n: str(d.n), b: int(d.b), min: int(d.min), rate: Math.round(num(d.rate, 0, 1000, 0) * 100) / 100,
         rt: d.rt === 'tna' || d.rt === 'tea' ? d.rt : 'm', rv: num(d.rv, 0, 100000, 0), due: Math.round(num(d.due, 0, 31, 0)),
-        late: num(d.late, 0, 1000, 0), paid: int(d.paid), share: num(d.share, 0, 100, 0)
+        late: num(d.late, 0, 1000, 0), paid: int(d.paid), share: num(d.share, 0, 100, 0), bank: str(d.bank, 40)
       };
     });
     if (Array.isArray(raw.fixed)) S.fixed = raw.fixed.slice(0, 300).filter(function (f) { return f && typeof f === 'object'; }).map(function (f) { return { id: str(f.id, 30), n: str(f.n), a: int(f.a) }; });
@@ -250,6 +249,8 @@
       var d = cleanJSON(e.d, 0); return { ts: num(e.ts, 0, 8.64e15, 0), t: str(e.t, 30), d: d && typeof d === 'object' && !Array.isArray(d) ? d : {} };
     });
     uniq(S.debts); uniq(S.fixed); uniq(S.extras);
+    // Copias anteriores no traen la marca: si ya hay datos, la configuración inicial se da por hecha.
+    S.setup = typeof raw.setup === 'boolean' ? raw.setup : (S.debts.length > 0 || S.income > 0 || S.log.length > 0);
     return S;
   }
 

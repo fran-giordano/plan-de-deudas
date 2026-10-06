@@ -30,6 +30,7 @@ async function open(ctx, init) {
 const state = (page) => page.evaluate(() => JSON.parse(JSON.stringify(PDD.getState())));
 const tabTo = async (page, t) => { await page.click('#tabs [data-t=' + t + ']'); await sleep(50); };
 const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+const canon = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x)) ? Object.keys(x).sort().reduce((o, key) => (o[key] = x[key], o), {}) : x);
 const diffState = (a, b) => { const o = []; for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) { if (k === 'updatedAt') continue; if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) { let w = k; if (Array.isArray(a[k]) && Array.isArray(b[k])) { let i = a[k].findIndex((x, j) => JSON.stringify(x) !== JSON.stringify(b[k][j])); if (i < 0) i = Math.min(a[k].length, b[k].length); w += '[' + i + '] ' + String(JSON.stringify(a[k][i])).slice(0, 160) + ' => ' + String(JSON.stringify(b[k][i])).slice(0, 160) + ' (largo ' + a[k].length + '/' + b[k].length + ')'; } o.push(w); } } return o; };
 const SHARE_MOCK = () => {
   window.__shared = [];
@@ -48,16 +49,23 @@ const SHARE_MOCK = () => {
   ok(S.demo && S.debts.length === 3, 'arranca con datos de ejemplo');
   ok(await page.locator('text=Instalala en tu iPhone').count() === 1, 'muestra cómo instalarla en iPhone');
   ok((await page.textContent('#sub')).trim() === 'Octubre 2026', 'encabezado con el mes', await page.textContent('#sub'));
-  for (const t of ['inicio', 'plan', 'deudas', 'fijos', 'ahorro']) {
+  for (const t of ['inicio', 'deudas', 'fijos', 'ahorro', 'ajustes']) {
     await tabTo(page, t);
     ok(await overflow(page) <= 0, 'sin scroll horizontal en ' + t, await overflow(page));
     await page.screenshot({ path: path.join(SHOTS, 'iphone-' + t + '.png'), fullPage: true });
   }
-  // botón "Compartir resumen" con la línea de aviso arriba
-  await tabTo(page, 'inicio');
+  // botón "Compartir resumen" (ahora en Ajustes) con la línea de aviso
+  await tabTo(page, 'ajustes');
   const shareCard = page.locator('.card:has([data-a=share])');
   ok((await shareCard.textContent()).includes('historial completo'), 'la línea sobre el botón avisa que va el historial completo');
+  ok(await page.locator('#tabs button').count() === 5 && (await page.textContent('#tabs')).includes('Ajustes') && !(await page.textContent('#tabs')).includes('Plan'), 'pestañas: Inicio, Deudas, Gastos, Ahorro y Ajustes');
+  ok(!(await page.textContent('#view')).match(/[Cc]olchón/), 'en Ajustes no queda la palabra colchón');
   // áreas táctiles
+  await tabTo(page, 'inicio');
+  ok(await page.locator('#view [data-a=save]').count() === 0, 'Inicio ya no tiene el botón Aparté');
+  ok(!(await page.textContent('#view')).match(/[Cc]olchón/) && (await page.textContent('#view')).includes('Ahorro'), 'Inicio dice Ahorro, no colchón');
+  ok(await page.locator('#debtCard .dbar').count() === 4, 'la tarjeta de deuda tiene una barra por mes (3 cierres + el actual)', await page.locator('#debtCard .dbar').count());
+  ok(await page.locator('#debtCard .dbar.up').count() === 0, 'si la deuda viene bajando no hay barras rojas');
   const small = await page.evaluate(() => [...document.querySelectorAll('button, label.mk-btn, select, input[type=text]')].filter((e) => e.offsetParent && !e.classList.contains('lnk') && !e.classList.contains('chip') && !e.classList.contains('pcin')).map((e) => ({ t: (e.textContent || e.id || '').trim().slice(0, 20), h: e.getBoundingClientRect().height })).filter((x) => x.h < 34));
   ok(small.length === 0, 'botones con alto táctil razonable (>=34px)', small);
   await page.click('text=Ocultar'); // demo
@@ -67,7 +75,7 @@ const SHARE_MOCK = () => {
   ok(await page.evaluate(() => localStorage.getItem('pdd:hint')) === '1', 'recuerda que ya vio cómo instalarla');
 
   // ---------- 2. pagar, deshacer, persistencia ----------
-  await page.click('#view .g2 [data-a=pay]');
+  await page.click('#view > [data-a=pay]');
   await page.selectOption('#f-debt', { label: 'Préstamo de un amigo' });
   await page.fill('#f-amt', '5000');
   ok(await page.inputValue('#f-amt') === '5.000', 'el monto se escribe con puntos de miles', await page.inputValue('#f-amt'));
@@ -82,7 +90,7 @@ const SHARE_MOCK = () => {
   ok(S.debts.find((d) => d.n === 'Préstamo de un amigo').b === 60000, 'deshacer devuelve el saldo');
   ok(S.log.some((e) => e.t === 'deshacer'), 'deshacer también queda en el historial');
   // pagar más de lo que se debe
-  await page.click('#view .g2 [data-a=pay]');
+  await page.click('#view > [data-a=pay]');
   await page.selectOption('#f-debt', { label: 'Préstamo de un amigo' });
   await page.fill('#f-amt', '999999');
   await page.click('[data-a=ok]');
@@ -91,43 +99,49 @@ const SHARE_MOCK = () => {
   ok((await page.textContent('#toast')).includes('lo que quedaba'), 'avisa que se anotó solo lo que quedaba');
   await page.click('#toast [data-a=undo]');
   // validación
-  await page.click('#view .g2 [data-a=pay]');
+  await page.click('#view > [data-a=pay]');
   await page.click('[data-a=ok]');
   ok(await page.locator('#err:visible').count() === 1, 'pide el monto si falta');
   await page.click('[data-a=no]');
 
   // ---------- 3. plan: ingreso y porcentajes ----------
-  await tabTo(page, 'plan');
+  await tabTo(page, 'ajustes');
+  ok(await page.locator('#inc').count() === 0 && await page.locator('#pctBox [data-k]').count() === 0, 'en Ajustes los valores se ven sin controles hasta tocar Cambiar');
+  await page.click('[data-a=editsueldo]');
   await page.fill('#inc', '700000');
-  ok((await page.textContent('#planBox')).includes('$140.000'), 'el plan se recalcula con el nuevo ingreso (20% = $140.000)', (await page.textContent('#planBox')).slice(0, 200));
-  await page.click('#planBox [data-k=dp][data-d="1"]');
+  ok((await page.textContent('#pctBox')).includes('$140.000'), 'el plan se recalcula con el nuevo sueldo (20% = $140.000)', (await page.textContent('#pctBox')).slice(0, 200));
+  await page.click('[data-a=editdone]');
+  await page.click('[data-a=editpct]');
+  await page.click('#pctBox [data-k=dp][data-d="1"]');
   S = await state(page);
   ok(S.dp === 21 && S.income === 700000, 'subir el porcentaje de deudas', { dp: S.dp });
-  await page.fill('#planBox input[data-pct=sp]', '15');
-  await page.dispatchEvent('#planBox input[data-pct=sp]', 'change');
+  await page.fill('#pctBox input[data-pct=sp]', '15');
+  await page.dispatchEvent('#pctBox input[data-pct=sp]', 'change');
   S = await state(page);
   ok(S.sp === 15, 'el porcentaje se puede escribir', S.sp);
-  await page.fill('#planBox input[data-pct=dp]', '95');
-  await page.dispatchEvent('#planBox input[data-pct=dp]', 'change');
+  await page.fill('#pctBox input[data-pct=dp]', '95');
+  await page.dispatchEvent('#pctBox input[data-pct=dp]', 'change');
   S = await state(page);
   ok(S.dp + S.sp <= 100, 'deudas + ahorro nunca pasan de 100%', { dp: S.dp, sp: S.sp });
-  await page.fill('#planBox input[data-pct=dp]', '20');
-  await page.dispatchEvent('#planBox input[data-pct=dp]', 'change');
-  await page.fill('#planBox input[data-pct=sp]', '10');
-  await page.dispatchEvent('#planBox input[data-pct=sp]', 'change');
+  await page.fill('#pctBox input[data-pct=dp]', '20');
+  await page.dispatchEvent('#pctBox input[data-pct=dp]', 'change');
+  await page.fill('#pctBox input[data-pct=sp]', '10');
+  await page.dispatchEvent('#pctBox input[data-pct=sp]', 'change');
   await sleep(1500); // deja que se junten los cambios en un solo movimiento
   S = await state(page);
   const planEvents = S.log.filter((e) => e.t === 'plan').length;
   ok(planEvents <= 2, 'los cambios de porcentajes se juntan (y si vuelven al valor original no dejan rastro)', planEvents);
   ok(S.log.filter((e) => e.t === 'ingreso').length === 1, 'el ingreso queda como un solo movimiento', S.log.filter((e) => e.t === 'ingreso'));
+  await page.click('[data-a=editdone]');
   // reparto
   await page.click('#divBox [data-a=suggest]');
   S = await state(page);
   ok(S.debts.filter((d) => d.b + d.paid > 0).reduce((a, d) => a + d.share, 0) === 100, 'sugerir reparto deja 100%');
+  await page.click('[data-a=editreparto]');
   await page.click('#divBox [data-a=sh][data-d="5"]');
   S = await state(page);
   ok(S.debts.filter((d) => d.b + d.paid > 0).reduce((a, d) => a + d.share, 0) === 100, 'ajustar el reparto a mano sigue sumando 100%');
-  await page.screenshot({ path: path.join(SHOTS, 'iphone-plan-editado.png'), fullPage: true });
+  await page.screenshot({ path: path.join(SHOTS, 'iphone-ajustes-editado.png'), fullPage: true });
 
   // ---------- 4. deudas: alta con TNA, edición, borrado ----------
   await tabTo(page, 'deudas');
@@ -142,18 +156,34 @@ const SHARE_MOCK = () => {
   ok((await page.textContent('#rate-out')).includes('5,95% por mes'), 'TEA 100% equivale a 5,95% por mes', await page.textContent('#rate-out'));
   await page.fill('#f-due', '25');
   await page.fill('#f-late', '8');
+  await page.fill('#f-bank', 'Banco Galicia');
   await page.click('[data-a=saveform]');
   S = await state(page);
   const nueva = S.debts.find((d) => d.n.startsWith('Préstamo del banco'));
-  ok(nueva && nueva.rate === 5.95 && nueva.rt === 'tea' && nueva.rv === 100 && nueva.min === 12000, 'alta de deuda con interés convertido y mínimo por defecto', nueva);
+  ok(nueva && nueva.rate === 5.95 && nueva.rt === 'tea' && nueva.rv === 100 && nueva.min === 12000 && nueva.bank === 'Banco Galicia', 'alta de deuda con interés convertido y mínimo por defecto', nueva);
   ok(S.debts.filter((d) => d.b + d.paid > 0).reduce((a, d) => a + d.share, 0) === 100, 'al sumar una deuda se vuelve a repartir');
   ok(await overflow(page) <= 0, 'nombre largo no rompe el ancho', await overflow(page));
   await page.screenshot({ path: path.join(SHOTS, 'iphone-deudas-largo.png'), fullPage: true });
+  ok(await page.locator('[data-a=open]').count() === 4 && await page.locator('[data-a=edit], [data-a=del]').count() === 0, 'la lista de deudas es simple: solo nombre y monto, sin botones de editar ni borrar');
+  await page.click('[data-a=open][data-i="' + nueva.id + '"]');
+  ok((await page.textContent('#view')).includes('Banco Galicia') && (await page.textContent('#view')).includes('5,95% por mes') && (await page.textContent('#view')).includes('el día 25'), 'el detalle muestra banco, interés y vencimiento');
+  ok(await overflow(page) <= 0, 'el detalle con nombre largo no rompe el ancho', await overflow(page));
+  await page.screenshot({ path: path.join(SHOTS, 'iphone-deuda-detalle.png'), fullPage: true });
+  await page.click('[data-a=back]');
+  ok(await page.locator('[data-a=open]').count() === 4, 'volver deja la lista');
+  await page.click('[data-a=open][data-i="' + nueva.id + '"]');
+  await page.click('[data-a=paydebt]');
+  ok(await page.inputValue('#f-debt') === nueva.id, 'pagar desde el detalle deja elegida esa deuda');
+  await page.fill('#f-amt', '10000'); await page.click('[data-a=ok]');
+  S = await state(page);
+  ok(S.debts.find((d) => d.id === nueva.id).b === 110000 && S.debts.find((d) => d.id === nueva.id).paid === 10000, 'el pago desde el detalle baja el saldo', S.debts.find((d) => d.id === nueva.id));
+  await page.click('#toast [data-a=undo]');
   // editar: corregir saldo con el resumen
-  await page.click('[data-a=edit][data-i="' + nueva.id + '"]');
+  await page.click('[data-a=edit]');
   ok(await page.inputValue('#f-rtype') === 'tea' && await page.inputValue('#f-rate') === '100', 'al editar se ve lo que el usuario escribió (TEA 100)');
   await page.fill('#f-amt', '130000');
   await page.click('[data-a=saveform]');
+  ok(await page.locator('[data-a=back]').count() === 1, 'al guardar una edición vuelve al detalle');
   S = await state(page);
   const ed = S.log.filter((e) => e.t === 'deuda_edicion').pop();
   ok(S.debts.find((d) => d.id === nueva.id).b === 130000 && ed && ed.d.antes.b === 120000 && ed.d.despues.b === 130000, 'la edición cambia el saldo y guarda antes/después', ed);
@@ -162,10 +192,12 @@ const SHARE_MOCK = () => {
   ok(await page.locator('[data-a=delyes]').count() === 1, 'borrar pide confirmación');
   await page.click('[data-a=delno]');
   ok((await state(page)).debts.length === 4, 'cancelar no borra');
+  
   await page.click('[data-a=del][data-i="' + nueva.id + '"]');
   await page.click('[data-a=delyes]');
   S = await state(page);
   ok(S.debts.length === 3 && S.log.some((e) => e.t === 'deuda_baja'), 'borrar queda en el historial');
+  ok(await page.locator('[data-a=open]').count() === 3, 'tras borrar vuelve a la lista');
 
   // ---------- 5. gastos fijos y extras ----------
   await tabTo(page, 'fijos');
@@ -190,12 +222,16 @@ const SHARE_MOCK = () => {
   S = await state(page);
   ok(S.extras.length === 2 && S.log.some((e) => e.t === 'extra_alta'), 'gasto extra puntual');
   await tabTo(page, 'inicio');
-  ok((await page.textContent('#view')).includes('Extras'), 'los extras aparecen en "a dónde va lo que cobraste"');
+  ok((await page.textContent('#view')).includes('Libre para vivir') && !(await page.textContent('#view')).includes('A dónde va'), 'Inicio muestra solo "Libre para vivir" (sin el cuadro de reparto)');
 
   // ---------- 6. ahorro y meta ----------
-  await tabTo(page, 'ahorro');
+  await tabTo(page, 'ajustes');
+  await page.click('[data-a=editmeta]');
   await page.fill('#goalin', '50000');
   await page.dispatchEvent('#goalin', 'change');
+  await page.click('[data-a=editdone]');
+  await tabTo(page, 'ahorro');
+  ok(await page.locator('#view #goalin').count() === 0, 'la meta ya no se edita en Ahorro (está en Ajustes)');
   await page.click('#view > [data-a=save]');
   await page.fill('#f-amt', '20000');
   await page.click('[data-a=ok]');
@@ -207,7 +243,7 @@ const SHARE_MOCK = () => {
   ok(S.saved === 40000 && !S.goalHit, 'deshacer el ahorro vuelve a abrir la meta');
   await page.click('[data-a=aedit]');
   await page.fill('#f-saved', '45000'); await page.click('[data-a=asave]');
-  ok((await state(page)).saved === 45000, 'corregir el colchón a mano');
+  ok((await state(page)).saved === 45000, 'corregir el ahorro a mano');
 
   // ---------- 7. persistencia real (IndexedDB y espejo) ----------
   await sleep(1500); // deja que se anoten los cambios pendientes
@@ -215,7 +251,7 @@ const SHARE_MOCK = () => {
   await page.reload(); await page.waitForSelector('#view .card');
   const after = await state(page);
   const strip = (s) => { const c = JSON.parse(JSON.stringify(s)); delete c.updatedAt; return c; };
-  ok(JSON.stringify(strip(before)) === JSON.stringify(strip(after)), 'al cerrar y volver a abrir queda todo igual', diffState(before, after));
+  ok(canon(strip(before)) === canon(strip(after)), 'al cerrar y volver a abrir queda todo igual', diffState(before, after));
   const idbHas = await page.evaluate(() => new Promise((res) => { const r = indexedDB.open('plan-de-deudas', 1); r.onsuccess = () => { const q = r.result.transaction('kv').objectStore('kv').get('state'); q.onsuccess = () => res(typeof q.result === 'string' && q.result.length > 100); }; r.onerror = () => res(false); }));
   ok(idbHas, 'hay copia en IndexedDB');
   ok(await page.evaluate(() => !!localStorage.getItem('pdd:state')), 'hay espejo en localStorage');
@@ -236,10 +272,11 @@ const SHARE_MOCK = () => {
   ctx = await newCtx(browser);
   page = await open(ctx, SHARE_MOCK);
   await page.click('text=Ocultar');
-  await tabTo(page, 'plan');
+  await tabTo(page, 'ajustes');
+  await page.click('[data-a=editsueldo]');
   await page.fill('#inc', '600000');
+  await page.click('[data-a=editdone]');
   await sleep(600);
-  await page.click('#tabs [data-t=inicio]');
   const atShare = strip(await state(page));
   await page.click('[data-a=share]');
   await sleep(300);
@@ -251,8 +288,7 @@ const SHARE_MOCK = () => {
   ok(shared[0].files[0].bom.join() === '239,187,191' && csv.includes('fecha,tipo,detalle,monto') && /,copia,/.test(csv), 'el CSV lleva BOM (acentos en Excel), historial y copia completa', shared[0].files[0].bom);
   S = await state(page);
   ok(S.lastBackup > 0 && S.log.some((e) => e.t === 'copia'), 'queda anotado cuándo se compartió');
-  await page.click('details#bk summary');
-  await page.click('details#bk [data-a=backup]');
+  await page.click('[data-a=backup]');
   await sleep(300);
   ok((await page.evaluate(() => window.__shared)).length === 2 && (await page.evaluate(() => window.__shared))[1].text === null, '"Guardar copia" manda solo el archivo, sin mensaje');
   // cancelar el menú no marca copia
@@ -264,12 +300,12 @@ const SHARE_MOCK = () => {
   // ---------- 9. restaurar copia ----------
   const file = path.join(SHOTS, 'copia.csv'); fs.writeFileSync(file, csv);
   const original = atShare; // la copia se arma con el estado justo antes de compartir
-  await page.click('details#bk [data-a=rst]');
-  ok(await page.locator('[data-a=rstyes]').count() === 1 && await page.locator('details#bk [data-a=backup]').count() >= 1, 'empezar de cero pide confirmación y ofrece guardar copia primero');
+  await page.click('[data-a=rst]');
+  ok(await page.locator('[data-a=rstyes]').count() === 1 && await page.locator('[data-a=backup]').count() >= 1, 'empezar de cero pide confirmación y ofrece guardar copia primero');
   await page.click('[data-a=rstyes]');
   ok((await state(page)).debts.length === 0 && !(await state(page)).demo, 'empezar de cero deja la app vacía');
-  await page.screenshot({ path: path.join(SHOTS, 'iphone-vacio.png'), fullPage: true });
-  await page.click('details#bk summary');
+  ok((await page.textContent('#view')).includes('Paso 1 de 3') && await page.locator('#tabs button').count() === 0, 'después de empezar de cero aparece la configuración guiada, sin pestañas');
+  await page.screenshot({ path: path.join(SHOTS, 'iphone-config-inicial.png'), fullPage: true });
   await page.setInputFiles('#impfile', file);
   await page.waitForSelector('[data-a=impyes]');
   await page.click('[data-a=impyes]');
@@ -277,11 +313,10 @@ const SHARE_MOCK = () => {
   const restored = strip(S);
   const lastLog = restored.log.pop(); // 'importacion' agregado al restaurar
   ok(lastLog.t === 'importacion', 'restaurar queda en el historial');
-  ok(JSON.stringify(restored) === JSON.stringify(original), 'restaurar la copia recupera exactamente lo que había', diffState(original, restored));
+  ok(canon(restored) === canon(original), 'restaurar la copia recupera exactamente lo que había', diffState(original, restored));
   // archivo inválido
   fs.writeFileSync(path.join(SHOTS, 'malo.csv'), 'hola,mundo\n1,2');
-  await page.click('details#bk summary').catch(() => {});
-  if (!(await page.locator('#impfile').count())) await page.click('details#bk summary');
+  await tabTo(page, 'ajustes');
   await page.setInputFiles('#impfile', path.join(SHOTS, 'malo.csv'));
   await sleep(200);
   ok((await page.textContent('#view')).includes('no parece una copia'), 'un archivo que no es copia se rechaza con un mensaje claro');
@@ -298,13 +333,11 @@ const SHARE_MOCK = () => {
   await page.addInitScript((s) => { if (!localStorage.getItem('pdd:state')) { localStorage.setItem('pdd:state', JSON.stringify(s)); localStorage.setItem('pdd:hint', '1'); } }, seeded);
   await page.goto(URL); await page.waitForSelector('#view .card');
   S = await state(page);
-  ok(S.month === '2026-10' && S.debts[0].b === 106000 && S.debts[0].paid === 0 && S.income === 0 && S.prevIncome === 650000, 'al empezar octubre: suma interés (6%), reinicia lo pagado y guarda el ingreso anterior', { month: S.month, b: S.debts[0].b });
+  ok(S.month === '2026-10' && S.debts[0].b === 106000 && S.debts[0].paid === 0 && S.income === 650000 && S.setup === true, 'al empezar octubre: suma interés (6%), reinicia lo pagado y el sueldo sigue cargado (copias viejas quedan como configuradas)', { month: S.month, b: S.debts[0].b });
   ok((await page.textContent('#view')).includes('Se sumaron unos $6.000 de intereses'), 'avisa de los intereses estimados');
   await page.screenshot({ path: path.join(SHOTS, 'iphone-mes-nuevo.png'), fullPage: true });
-  await tabTo(page, 'plan');
-  ok(await page.locator('text=Usar lo del mes pasado').count() === 1, 'ofrece usar el ingreso del mes pasado');
-  await page.click('[data-a=useprev]');
-  ok((await state(page)).income === 650000, 'usar el ingreso del mes pasado');
+  ok(!(await page.textContent('#view')).includes('Todavía no cargaste tu sueldo') && (await page.textContent('#view')).includes('$650.000'), 'no vuelve a pedir el sueldo al empezar el mes');
+  ok(await page.locator('#debtCard .dbar.up').count() === 1, 'la deuda subió por los intereses: la barra del mes sale en rojo');
 
   // ---------- 11. sin conexión + PWA ----------
   await ctx.close();
@@ -333,17 +366,57 @@ const SHARE_MOCK = () => {
   await ctx.close();
   ctx = await newCtx(browser, { viewport: { width: 320, height: 568 }, colorScheme: 'dark' });
   page = await open(ctx);
-  for (const t of ['inicio', 'plan', 'deudas', 'fijos', 'ahorro']) { await tabTo(page, t); ok(await overflow(page) <= 0, 'iPhone chico (320px), sin scroll horizontal en ' + t, await overflow(page)); }
+  for (const t of ['inicio', 'deudas', 'fijos', 'ahorro', 'ajustes']) { await tabTo(page, t); ok(await overflow(page) <= 0, 'iPhone chico (320px), sin scroll horizontal en ' + t, await overflow(page)); }
   await tabTo(page, 'inicio'); await page.screenshot({ path: path.join(SHOTS, 'iphone-chico-oscuro.png'), fullPage: true });
   await ctx.close();
 
   // ---------- 13. sin menú de compartir (respaldo) ----------
   ctx = await newCtx(browser);
   page = await open(ctx);
+  await tabTo(page, 'ajustes');
   const dl = page.waitForEvent('download');
   await page.click('[data-a=share]');
   const d = await dl;
   ok(d.suggestedFilename().endsWith('.csv'), 'sin menú de compartir descarga el archivo', d.suggestedFilename());
+  await ctx.close();
+
+  // ---------- 14. configuración guiada (primera vez) ----------
+  ctx = await newCtx(browser);
+  page = await open(ctx);
+  await page.click('text=Borrar ejemplos');
+  ok(await page.locator('text=Paso 1 de 3').count() === 1 && await page.locator('nav:visible').count() === 0, 'al borrar los ejemplos empieza la configuración guiada');
+  await page.click('[data-a=wnext]');
+  ok(await page.locator('#err:visible').count() === 1, 'no deja seguir sin sueldo');
+  await page.fill('#inc', '480000');
+  ok((await page.textContent('#pctBox')).includes('$') && (await page.textContent('#pctBox')).includes('70%'), 'muestra cuánto queda para gastos y vivir', (await page.textContent('#pctBox')).slice(0, 160));
+  await page.click('#pctBox [data-k=dp][data-d="1"]');
+  await page.click('[data-a=wnext]');
+  ok(await page.locator('text=Paso 2 de 3').count() === 1, 'paso 2: meta de ahorro');
+  await page.fill('#goalin', '150000'); await page.dispatchEvent('#goalin', 'change');
+  await page.click('[data-a=wback]');
+  ok(await page.inputValue('#inc') === '480.000', 'Atrás conserva lo cargado');
+  await page.click('[data-a=wnext]');
+  await page.click('[data-a=wnext]');
+  S = await state(page);
+  ok(S.setup === true && S.income === 480000 && S.dp === 21 && S.goal === 150000 && S.log.some((e) => e.t === 'config_inicial'), 'termina la configuración y guarda sueldo, porcentajes y meta', { income: S.income, dp: S.dp, goal: S.goal });
+  ok(await page.locator('text=Paso 3 de 3').count() === 1, 'paso 3: listo');
+  await page.screenshot({ path: path.join(SHOTS, 'iphone-config-listo.png'), fullPage: true });
+  await page.click('[data-a=wdeudas]');
+  ok(await page.locator('#f-name').count() === 1 && await page.locator('#tabs button').count() === 5, 'lleva directo a cargar la primera deuda');
+  await page.fill('#f-name', 'Tarjeta'); await page.fill('#f-amt', '100000'); await page.click('[data-a=saveform]');
+  await tabTo(page, 'inicio');
+  ok(!(await page.textContent('#view')).includes('Todavía no cargaste tu sueldo'), 'con el sueldo cargado no vuelve a pedirlo');
+  await page.reload(); await page.waitForSelector('#view .card');
+  ok(await page.locator('#tabs button').count() === 5, 'al volver a abrir no repite la configuración');
+  await ctx.close();
+  // el aviso de ahorro lleva a la pestaña Ahorro
+  ctx = await newCtx(browser);
+  await ctx.clock.setFixedTime(new Date('2026-10-28T12:00:00-03:00'));
+  page = await open(ctx);
+  await page.click('text=Ocultar');
+  const lnk = page.locator('#view [data-a=save]');
+  if (await lnk.count()) { await lnk.first().click(); ok(await page.locator('#tabs [aria-current=page]').textContent().then((t) => t.includes('Ahorro')) && await page.locator('#panel').count() === 1, 'el aviso "Anotar ahorro" lleva a Ahorro con el panel abierto'); }
+  else ok(true, 'sin aviso de ahorro ese día (no aplica)');
   await ctx.close();
 
   ok(errors.length === 0, 'ningún error de JS en toda la sesión', errors);

@@ -16,7 +16,7 @@
   function safe(s) { s = String(s); return /^[=+\-@\t\r]/.test(s) ? "'" + s : s; }
   function row(a) { return a.map(q).join(','); }
 
-  var LABELS = { n: 'nombre', b: 'saldo', min: 'mínimo', rate: 'interés mensual %', due: 'vence el día', late: 'recargo %', paid: 'pagado en el mes', a: 'monto' };
+  var LABELS = { n: 'nombre', b: 'saldo', min: 'mínimo', rate: 'interés mensual %', due: 'vence el día', late: 'recargo %', paid: 'pagado en el mes', a: 'monto', bank: 'banco' };
   var MONEY = { b: 1, min: 1, paid: 1, a: 1 };
 
   function diff(antes, despues) {
@@ -37,12 +37,12 @@
   function describe(ev) {
     var d = ev.d || {}, t = ev.t;
     switch (t) {
-      case 'ingreso': return ['Cobro', 'Cobro del mes: ' + fmt(d.antes || 0) + ' → ' + fmt(d.despues || 0), d.despues || 0];
+      case 'ingreso': return ['Sueldo', 'Sueldo por mes: ' + fmt(d.antes || 0) + ' → ' + fmt(d.despues || 0), d.despues || 0];
       case 'pago': return ['Pago', 'Pago a "' + (d.n || '') + '"' + (d.pedido && d.pedido !== d.monto ? ' (se anotó solo lo que quedaba)' : ''), d.monto || 0];
-      case 'ahorro': return ['Ahorro', 'Apartado para el colchón', d.monto || 0];
+      case 'ahorro': return ['Ahorro', 'Apartado para el ahorro', d.monto || 0];
       case 'ahorro_ajuste': return ['Ahorro', 'Corrección: ' + diff(d.antes, d.despues), ''];
-      case 'meta': return ['Meta', 'Meta del colchón: ' + fmt(d.antes || 0) + ' → ' + fmt(d.despues || 0), d.despues || 0];
-      case 'meta_alcanzada': return ['Meta', 'El colchón llegó a la meta; el ahorro pasa a deudas', d.colchon || 0];
+      case 'meta': return ['Meta', 'Meta de ahorro: ' + fmt(d.antes || 0) + ' → ' + fmt(d.despues || 0), d.despues || 0];
+      case 'meta_alcanzada': return ['Meta', 'El ahorro llegó a la meta; el porcentaje de ahorro pasa a deudas', d.colchon || 0];
       case 'plan': return ['Plan', 'Porcentajes: deudas ' + (d.antes ? d.antes.dp : '?') + '% → ' + (d.despues ? d.despues.dp : '?') + '%; ahorro ' + (d.antes ? d.antes.sp : '?') + '% → ' + (d.despues ? d.despues.sp : '?') + '%', ''];
       case 'reparto': return ['Plan', 'Reparto entre deudas' + (d.motivo ? ' (' + d.motivo + ')' : '') + ': ' + mapDiff(d.antes, d.despues), ''];
       case 'deuda_alta': return ['Deuda nueva', '"' + (d.n || '') + '": saldo ' + fmt(d.b || 0) + ', mínimo ' + fmt(d.min || 0) + (d.rate ? ', interés ' + d.rate + '% mensual' : ''), d.b || 0];
@@ -58,6 +58,7 @@
         var its = (d.intereses || []).map(function (i) { return i.n + ' +' + fmt(i.m); }).join('; ');
         return ['Mes nuevo', 'Empezó ' + (d.mes || '') + (its ? '. Intereses estimados: ' + its : ''), ''];
       }
+      case 'config_inicial': return ['Configuración', 'Se terminó la configuración inicial', d.sueldo || ''];
       case 'copia': return ['Copia', d.tipo === 'compartir' ? 'Resumen compartido' : 'Copia guardada', ''];
       case 'importacion': return ['Copia', 'Se restauró una copia' + (d.desde ? ' (' + d.desde + ')' : ''), ''];
       case 'deshacer': return ['Deshacer', 'Se deshizo un ' + (d.de || 'movimiento') + (d.n ? ' a "' + d.n + '"' : ''), d.monto || ''];
@@ -71,13 +72,13 @@
     rows.push(row([at, 'Resumen', 'Mes', P.monthName(S.month) + ' ' + S.month.slice(0, 4)]));
     rows.push(row([at, 'Resumen', 'Deuda total', tot]));
     S.debts.forEach(function (d) {
-      rows.push(row([at, 'Resumen', safe('Deuda: ' + d.n + ' (mínimo ' + fmt(d.min) + (d.rate ? ', interés ' + d.rate + '% mensual' : '') + (d.due ? ', vence el día ' + d.due : '') + ')'), d.b]));
+      rows.push(row([at, 'Resumen', safe('Deuda: ' + d.n + ' (mínimo ' + fmt(d.min) + (d.rate ? ', interés ' + d.rate + '% mensual' : '') + (d.due ? ', vence el día ' + d.due : '') + (d.bank ? ', banco ' + d.bank : '') + ')'), d.b]));
     });
-    rows.push(row([at, 'Resumen', 'Cobrado este mes', S.income]));
+    rows.push(row([at, 'Resumen', 'Sueldo por mes', S.income]));
     rows.push(row([at, 'Resumen', 'Pagado a deudas este mes', C.Pd]));
     rows.push(row([at, 'Resumen', 'Gastos fijos por mes', C.fixedTotal]));
     rows.push(row([at, 'Resumen', 'Gastos extras del mes', C.extraTotal]));
-    rows.push(row([at, 'Resumen', 'Colchón (meta ' + fmt(S.goal) + ')', S.saved]));
+    rows.push(row([at, 'Resumen', 'Ahorro (meta ' + fmt(S.goal) + ')', S.saved]));
     S.log.forEach(function (ev) {
       var x = describe(ev);
       rows.push(row([stamp(ev.ts), x[0], safe(x[1]), x[2]]));
@@ -120,7 +121,7 @@
     if (prev !== null && tot !== prev) l += tot < prev ? ' (bajó ' + fmt(prev - tot) + ' desde el cierre del mes pasado)' : ' (subió ' + fmt(tot - prev) + ' desde el cierre del mes pasado)';
     lines.push(l);
     if (C.T > 0) lines.push('Pagado este mes: ' + fmt(C.Pd) + ' de ' + fmt(C.T));
-    if (S.goal > 0 || S.saved > 0) lines.push('Colchón: ' + fmt(S.saved) + (S.goal > 0 ? ' de ' + fmt(S.goal) : ''));
+    if (S.goal > 0 || S.saved > 0) lines.push('Ahorro: ' + fmt(S.saved) + (S.goal > 0 ? ' de ' + fmt(S.goal) : ''));
     lines.push('Te mando el historial completo en el archivo.');
     return lines.join('\n');
   }

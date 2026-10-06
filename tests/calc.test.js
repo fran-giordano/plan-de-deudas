@@ -129,8 +129,7 @@ test('cambio de mes: cierra, suma intereses, reinicia lo del mes', () => {
   assert.equal(S.debts[0].b, b0 + Math.round(b0 * 0.06));
   assert.equal(S.debts[1].b, 60000, 'sin interés no cambia');
   assert.ok(S.debts.every((d) => d.paid === 0));
-  assert.equal(S.income, 0);
-  assert.equal(S.prevIncome, 600000);
+  assert.equal(S.income, 600000, 'el sueldo es fijo: no se reinicia al cambiar de mes');
   assert.equal(S.savedMonth, 0);
   assert.ok(r.interest > 0);
   assert.equal(S.log[S.log.length - 1].t, 'mes_nuevo');
@@ -207,7 +206,7 @@ test('texto del resumen para compartir', () => {
   const t = B.summaryText(S, P.calc(S), NOW);
   assert.match(t, /^Resumen de octubre/);
   assert.match(t, /Deuda total: \$305\.000 \(bajó \$25\.000/);
-  assert.match(t, /Colchón: \$40\.000 de \$280\.000/);
+  assert.match(t, /Ahorro: \$40\.000 de \$280\.000/);
 });
 
 test('el historial describe ediciones y borrados', () => {
@@ -222,4 +221,27 @@ test('aviso de copia de seguridad vieja', () => {
   assert.ok(P.alerts(S, P.calc(S), NOW).some((a) => a.a === 'backup'));
   S.lastBackup = NOW.getTime() - 2 * P.DAY;
   assert.ok(!P.alerts(S, P.calc(S), NOW).some((a) => a.a === 'backup'));
+});
+
+test('configuración inicial: copias viejas con datos se dan por configuradas', () => {
+  assert.equal(P.sanitize({ income: 500000 }).setup, true);
+  assert.equal(P.sanitize({ debts: [{ n: 'x', b: 1 }] }).setup, true);
+  assert.equal(P.sanitize({}).setup, false, 'vacío: falta configurar');
+  assert.equal(P.sanitize({ income: 500000, setup: false }).setup, false, 'si la marca está, se respeta');
+  assert.equal(P.blank(NOW).setup, false);
+  assert.equal(P.demo(NOW).setup, true);
+});
+
+test('banco de la deuda: opcional, se sanea y viaja en la copia', () => {
+  assert.equal(P.sanitize({ debts: [{ id: 'a', n: 'x', b: 1 }] }).debts[0].bank, '', 'copias viejas sin banco');
+  const S = mk(); S.debts[0].bank = 'Galicia';
+  const back = B.fromCSV(B.toCSV(S, P.calc(S), NOW));
+  assert.equal(back.debts[0].bank, 'Galicia');
+  assert.equal(P.sanitize({ debts: [{ id: 'a', n: 'x', b: 1, bank: 'x'.repeat(200) }] }).debts[0].bank.length, 40);
+});
+
+test('sin sueldo cargado el aviso lleva a Ajustes', () => {
+  const S = P.blank(NOW); S.setup = true;
+  const a = P.alerts(S, P.calc(S), NOW).find((x) => /sueldo/.test(x.t));
+  assert.ok(a && a.a === 'tab' && a.d === 'ajustes');
 });
