@@ -145,16 +145,16 @@
     var tot = sum(S.debts, function (d) { return d.b; });
     var prev = S.hist.length ? S.hist[S.hist.length - 1].total : null;
     var sim = simulate(S, C);
-    if (S.income <= 0) L.push({ lv: 'warn', t: 'Todavía no cargaste tu sueldo. Sin eso no se puede calcular el plan.', a: 'tab', d: 'ajustes', al: 'Cargar sueldo' });
+    if (S.income <= 0) L.push({ lv: 'warn', t: 'Todavía no cargaste tu sueldo. Sin eso no se puede calcular el plan.', a: 'tab', d: 'ajustes/base', al: 'Cargar sueldo' });
     S.debts.forEach(function (d) {
       var li = lateInfo(S, C, d, now); if (!li) return;
       if (li.over) L.push({ lv: 'bad', t: d.n + ' venció el día ' + d.due + '. Faltan ' + fmt(li.left) + ' del pago del mes' + (li.extra > 0 ? ' y el banco puede sumar unos ' + fmt(li.extra) + ' de recargo (serían ' + fmt(li.left + li.extra) + ').' : '.'), a: 'pay', al: 'Registrar pago' });
       else if (li.dd <= 5) L.push({ lv: 'warn', t: d.n + ' vence ' + whenText(li.dd) + '. Faltan ' + fmt(li.left) + (li.extra > 0 ? '. Si no se paga a tiempo, se sumarían unos ' + fmt(li.extra) + ' de recargo.' : '.'), a: 'pay', al: 'Registrar pago' });
     });
-    if (S.income > 0 && C.free < 0) L.push({ lv: 'bad', t: 'Los gastos fijos, los extras y el plan superan lo que cobraste por ' + fmt(-C.free) + '.', a: 'tab', d: 'ajustes', al: 'Ajustar el plan' });
+    if (S.income > 0 && C.free < 0) L.push({ lv: 'bad', t: 'Los gastos fijos, los extras y el plan superan lo que cobraste por ' + fmt(-C.free) + '.', a: 'tab', d: 'ajustes/plan', al: 'Ajustar el plan' });
     if (S.income > 0 && C.extraTotal > S.income * 0.15) L.push({ lv: 'warn', t: 'Los gastos extras de este mes suman ' + fmt(C.extraTotal) + ' (' + Math.round(C.extraTotal / S.income * 100) + '% de lo que cobraste). Si el mes viene justo, conviene posponer alguno.', a: 'xgo', al: 'Ver extras' });
-    if (C.short) L.push({ lv: 'warn', t: 'El porcentaje de deudas no alcanza para los pagos mínimos (' + fmt(C.sumMin) + ').', a: 'tab', d: 'ajustes', al: 'Ajustar el plan' });
-    if (tot > 0 && S.income > 0 && !sim.ok) L.push({ lv: 'bad', t: 'Con este plan la deuda no baja: el pago no cubre los intereses.', a: 'tab', d: 'ajustes', al: 'Ajustar el plan' });
+    if (C.short) L.push({ lv: 'warn', t: 'El porcentaje de deudas no alcanza para los pagos mínimos (' + fmt(C.sumMin) + ').', a: 'tab', d: 'ajustes/plan', al: 'Ajustar el plan' });
+    if (tot > 0 && S.income > 0 && !sim.ok) L.push({ lv: 'bad', t: 'Con este plan la deuda no baja: el pago no cubre los intereses.', a: 'tab', d: 'ajustes/plan', al: 'Ajustar el plan' });
     if (prev !== null && tot > prev && day >= 10) L.push({ lv: 'bad', t: 'La deuda subió ' + fmt(tot - prev) + ' respecto del cierre del mes pasado. Revisá si sumaste deudas o si los intereses superan lo que pagaste.' });
     if (C.T > 0 && C.T - C.Pd > 0) {
       var left = dim - day;

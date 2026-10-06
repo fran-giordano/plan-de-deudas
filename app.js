@@ -4,7 +4,7 @@
   var P = PDD.calc, B = PDD.backup, ST = PDD.store;
   var VERSION = '1.0.0';
   var S = null, C = {}, tab = 'inicio', undoInfo = null, toastT = null, pend = {}, saveT = null, storeOk = true, ui = {};
-  var TABS = [['inicio', 'Inicio', 'home'], ['deudas', 'Deudas', 'list'], ['fijos', 'Gastos', 'calendar'], ['ahorro', 'Ahorro', 'coin'], ['ajustes', 'Ajustes', 'sliders']];
+  var TABS = [['inicio', 'Inicio', 'home'], ['deudas', 'Deudas', 'list'], ['ahorro', 'Ahorro', 'coin'], ['ajustes', 'Ajustes', 'sliders']];
   var XCH = ['Curso', 'Arreglo', 'Regalo', 'Salud', 'Viaje', 'Compra grande'];
   var CH = ['Alquiler', 'Servicios', 'Internet y celular', 'Transporte', 'Salud', 'Educación'];
   var IC = {
@@ -39,7 +39,7 @@
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* nada */ } }
   function isIOS() { return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
   function standalone() { return navigator.standalone === true || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches); }
-  function resetUi() { ui = { panel: null, form: null, del: null, fform: null, fdel: null, sub: 'fijos', xform: null, xdel: null, aform: false, imp: null, impErr: null, rst: false, detail: null, payDebt: null, edit: null, wiz: 1, fin: false }; }
+  function resetUi() { ui = { panel: null, form: null, del: null, fform: null, fdel: null, sub: 'fijos', aj: null, xform: null, xdel: null, aform: false, imp: null, impErr: null, rst: false, detail: null, payDebt: null, edit: null, wiz: 1, fin: false }; }
   resetUi();
 
   // ---------- guardado e historial ----------
@@ -132,7 +132,7 @@
   }
   function backupBox() {
     var last = S.lastBackup ? dateTxt(S.lastBackup) : 'todavía no guardaste una';
-    var h = '<div class="card col" style="gap:10px"><p style="font-weight:600">Copia de seguridad</p><p class="mk-sub" style="font-size:13px">Tus datos están solo en este celular. Última copia: ' + last + '.</p><button class="mk-btn pri" data-a="share">' + ic('share', 18) + 'Compartir resumen</button><p class="mk-sub" style="font-size:13px">Se envía el resumen del mes y el historial completo de todo lo que cargaste. La app nunca manda nada sola. El archivo también sirve como copia.</p><button class="mk-btn sm" data-a="backup">Guardar copia</button>' + importBox() + '</div>';
+    var h = '<div class="card col" style="gap:10px"><p style="font-weight:600">Copia de seguridad</p><p class="mk-sub" style="font-size:13px">Tus datos están solo en este celular. Última copia: ' + last + '.</p><button class="mk-btn pri" data-a="backup">Guardar copia</button><p class="mk-sub" style="font-size:13px">Guarda un archivo con todos tus datos. Sirve para recuperarlos si cambiás de celular o se borra la app.</p>' + importBox() + '</div>';
     if (ui.rst) h += '<div class="card col" style="gap:8px"><p>Se borra todo: deudas, gastos, ahorro e historial. ¿Guardaste una copia?</p><button class="mk-btn sm" data-a="backup">Guardar copia primero</button><button class="mk-btn sm danger" data-a="rstyes">Sí, borrar todo</button><button class="mk-btn sm" data-a="rstno">Cancelar</button></div>';
     else h += '<button class="mk-btn sm danger" data-a="rst">Empezar de cero</button>';
     return h + '<p class="ver">Versión ' + VERSION + '</p>';
@@ -170,8 +170,9 @@
     }
     var cp = S.goal > 0 ? Math.min(100, Math.round(S.saved / S.goal * 100)) : 0;
     h += '<div class="g2" style="gap:8px"><div class="card"><p class="mk-lbl">Libre para vivir</p>' +
-      (S.income > 0 ? '<p class="mk-big sm20" style="color:' + (C.free < 0 ? 'var(--bad)' : 'var(--fg)') + '">' + money(C.free) + '</p><p class="mk-sub">De un sueldo de ' + money(S.income) + ', después de gastos, deudas y ahorro</p>' : '<p class="mk-sub" style="margin-top:6px">Cargá tu sueldo para verlo.</p><button class="lnk" style="padding-left:0" data-a="tab" data-t="ajustes">Cargar sueldo</button>') +
+      (S.income > 0 ? '<p class="mk-big sm20" style="color:' + (C.free < 0 ? 'var(--bad)' : 'var(--fg)') + '">' + money(C.free) + '</p><p class="mk-sub">De un sueldo de ' + money(S.income) + ', después de gastos, deudas y ahorro</p>' : '<p class="mk-sub" style="margin-top:6px">Cargá tu sueldo para verlo.</p><button class="lnk" style="padding-left:0" data-a="tab" data-t="ajustes/base">Cargar sueldo</button>') +
       '</div><button class="card tile" data-a="tab" data-t="ahorro" aria-label="Ir a Ahorro"><span class="tl"><span class="mk-lbl">Ahorro</span>' + (S.goal > 0 ? '<b>' + cp + '%</b>' : '') + '</span><span class="mk-big sm20">' + money(S.saved) + '</span><span class="mk-bar"><i style="width:' + cp + '%;background:var(--good)"></i></span><span class="mk-sub">' + (S.goal > 0 ? 'Meta ' + money(S.goal) : 'Todavía no definiste una meta') + '</span></button></div>';
+    h += '<div class="card col" style="gap:8px"><button class="mk-btn" data-a="share">' + ic('share', 18) + 'Compartir resumen</button><p class="mk-sub" style="font-size:13px">Se envía el resumen del mes y el historial completo de todo lo que cargaste. La app nunca manda nada sola.</p></div>';
     return h;
   }
 
@@ -240,9 +241,24 @@
     return h + '<p class="mk-sub" style="margin-bottom:8px;font-size:13px">Primero los mínimos de cada una. Lo que sobra va a la que tiene más interés.</p><button class="mk-btn sm" data-a="suggest">Volver a sugerir el reparto</button>' + rowBtn('editreparto', 'Cambiarlo a mano');
   }
   function refreshPlan() { var a = $('#pctBox'), b = $('#divBox'); if (a) a.innerHTML = pctBox(pctMode()); if (b) b.innerHTML = divCard(); }
+  var AJ = { base: 'Configuración base', plan: 'Plan de pago', gastos: 'Gastos', copia: 'Copia de seguridad' };
+  function menuRow(k, sub) { return '<button class="card drow" data-a="aj" data-s="' + k + '"><span class="nm">' + AJ[k] + '<span class="sm">' + sub + '</span></span>' + ic('chevron', 18, 'var(--faint)') + '</button>'; }
   function vAjustes() {
     C = P.calc(S);
-    return '<p class="mk-sub" style="font-size:13px">Se configura una vez y queda así.</p>' + sueldoCard() + '<div class="card" id="pctBox">' + pctBox(pctMode()) + '</div><div class="card" id="divBox">' + divCard() + '</div>' + metaCard() + backupBox();
+    if (!AJ[ui.aj]) {
+      ui.aj = null;
+      return '<p class="mk-sub" style="font-size:13px">Se configura una vez y queda así.</p>' +
+        menuRow('base', (S.income > 0 ? 'Sueldo ' + money(S.income) : 'Sueldo sin cargar') + ' · ' + (S.goal > 0 ? 'meta ' + money(S.goal) : 'sin meta de ahorro')) +
+        menuRow('plan', S.dp + '% a deudas · ' + S.sp + '% a ahorro') +
+        menuRow('gastos', 'Fijos ' + money(C.fixedTotal) + (C.extraTotal > 0 ? ' · extras ' + money(C.extraTotal) : '')) +
+        menuRow('copia', S.lastBackup ? 'Última copia: ' + dateTxt(S.lastBackup) : 'Todavía no guardaste una copia') +
+        '<p class="ver">Versión ' + VERSION + '</p>';
+    }
+    var h = '<button class="back" data-a="ajback">' + ic('back', 18) + 'Ajustes</button><h2 class="dname">' + AJ[ui.aj] + '</h2>';
+    if (ui.aj === 'base') return h + sueldoCard() + metaCard();
+    if (ui.aj === 'plan') return h + '<div class="card" id="pctBox">' + pctBox(pctMode()) + '</div><div class="card" id="divBox">' + divCard() + '</div>';
+    if (ui.aj === 'gastos') return h + vGastos();
+    return h + backupBox();
   }
 
   // ---------- Primera vez: configuración guiada ----------
@@ -366,7 +382,7 @@
     C = P.calc(S);
     var p = S.goal > 0 ? Math.min(100, Math.round(S.saved / S.goal * 100)) : 0;
     var h = '<div class="card"><p class="mk-lbl">Ahorro</p><p class="mk-big">' + money(S.saved) + '</p><div class="mk-bar"><i style="width:' + p + '%;background:var(--good)"></i></div><p class="mk-sub">' + (S.goal > 0 ? p + '% de la meta' : 'Definí una meta para ver el avance') + '</p></div>';
-    h += '<div class="card"><p class="mk-lbl">Meta de ahorro</p><p class="mk-big">' + (S.goal > 0 ? money(S.goal) : 'Sin meta') + '</p><button class="lnk" style="padding-left:0" data-a="tab" data-t="ajustes">' + (S.goal > 0 ? 'Cambiar la meta en Ajustes' : 'Definir la meta en Ajustes') + '</button></div>';
+    h += '<div class="card"><p class="mk-lbl">Meta de ahorro</p><p class="mk-big">' + (S.goal > 0 ? money(S.goal) : 'Sin meta') + '</p><button class="lnk" style="padding-left:0" data-a="tab" data-t="ajustes/base">' + (S.goal > 0 ? 'Cambiar la meta en Ajustes' : 'Definir la meta en Ajustes') + '</button></div>';
     h += '<div class="card"><p class="mk-lbl">Este mes</p><p class="mk-big">' + money(S.savedMonth) + (C.sAmt > 0 ? ' de ' + money(C.sAmt) : '') + '</p>' + (C.full ? '<p class="mk-sub">El ahorro llegó a la meta: el porcentaje de ahorro pasa a deudas.</p>' : '') + '</div>';
     h += '<button class="mk-btn pri" data-a="save">' + ic('coin', 18) + 'Aparté</button>' + panelHtml();
     if (ui.aform) h += '<div class="card col" style="gap:10px"><p style="font-weight:600">Corregir montos</p><label class="lbl13" for="f-saved">Ahorro total</label><input id="f-saved" type="text" inputmode="numeric" data-money value="' + P.fmtNum(S.saved) + '" placeholder="$ 0" autocomplete="off"><label class="lbl13" for="f-sm">Apartado este mes</label><input id="f-sm" type="text" inputmode="numeric" data-money value="' + P.fmtNum(S.savedMonth) + '" placeholder="$ 0" autocomplete="off"><div class="g2" style="gap:8px"><button class="mk-btn pri" data-a="asave">Guardar</button><button class="mk-btn" data-a="acancel">Cancelar</button></div></div>';
@@ -374,7 +390,7 @@
     return h;
   }
 
-  var VIEWS = { inicio: vInicio, deudas: vDeudas, fijos: vGastos, ahorro: vAhorro, ajustes: vAjustes };
+  var VIEWS = { inicio: vInicio, deudas: vDeudas, ahorro: vAhorro, ajustes: vAjustes };
   function render() {
     var wiz = !S.setup || ui.fin;
     $('#sub').textContent = cap(P.monthName(S.month)) + ' ' + S.month.slice(0, 4);
@@ -426,7 +442,7 @@
 
   // ---------- acciones ----------
   var A = {
-    tab: function (b) { resetUi(); ui.sub = 'fijos'; tab = b.dataset.t; hideToast(); render(); window.scrollTo(0, 0); },
+    tab: function (b) { var t = b.dataset.t.split('/'); resetUi(); ui.sub = 'fijos'; tab = t[0]; ui.aj = t[1] || null; hideToast(); render(); window.scrollTo(0, 0); },
     pay: function () { if (!S.debts.some(function (d) { return d.b > 0; })) { toast('No hay deudas pendientes'); return; } if (tab !== 'inicio') { resetUi(); tab = 'inicio'; } ui.panel = 'pay'; ui.payDebt = null; render(); window.scrollTo(0, 0); focusFirst(); },
     paydebt: function () { ui.panel = 'pay'; ui.payDebt = ui.detail; render(); focusFirst(); },
     save: function () { if (tab !== 'ahorro') { resetUi(); tab = 'ahorro'; } ui.panel = 'save'; render(); window.scrollTo(0, 0); focusFirst(); },
@@ -471,7 +487,9 @@
       commit('reparto', { motivo: 'sugerido', antes: before, despues: sharesMap() }); toast('Reparto sugerido'); refreshPlan();
     },
     sub: function (b) { ui.sub = b.dataset.s; ui.fform = null; ui.fdel = null; ui.xform = null; ui.xdel = null; render(); },
-    xgo: function () { resetUi(); tab = 'fijos'; ui.sub = 'extras'; ui.xform = { id: null }; hideToast(); render(); window.scrollTo(0, 0); focusFirst(); },
+    aj: function (b) { resetUi(); ui.aj = b.dataset.s; hideToast(); render(); window.scrollTo(0, 0); },
+    ajback: function () { resetUi(); render(); window.scrollTo(0, 0); },
+    xgo: function () { resetUi(); tab = 'ajustes'; ui.aj = 'gastos'; ui.sub = 'extras'; ui.xform = { id: null }; hideToast(); render(); window.scrollTo(0, 0); focusFirst(); },
     xnew: function () { ui.xform = { id: null }; render(); focusFirst(); },
     xedit: function (b) { ui.xform = { id: b.dataset.i }; ui.xdel = null; render(); focusFirst(); },
     xcancel: function () { ui.xform = null; render(); },

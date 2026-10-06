@@ -243,5 +243,5 @@ test('banco de la deuda: opcional, se sanea y viaja en la copia', () => {
 test('sin sueldo cargado el aviso lleva a Ajustes', () => {
   const S = P.blank(NOW); S.setup = true;
   const a = P.alerts(S, P.calc(S), NOW).find((x) => /sueldo/.test(x.t));
-  assert.ok(a && a.a === 'tab' && a.d === 'ajustes');
+  assert.ok(a && a.a === 'tab' && a.d === 'ajustes/base');
 });

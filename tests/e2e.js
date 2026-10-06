@@ -28,6 +28,7 @@ async function open(ctx, init) {
   return page;
 }
 const state = (page) => page.evaluate(() => JSON.parse(JSON.stringify(PDD.getState())));
+const ajTo = async (page, k) => { await tabTo(page, 'ajustes'); await page.click('[data-a=aj][data-s=' + k + ']'); await sleep(50); };
 const tabTo = async (page, t) => { await page.click('#tabs [data-t=' + t + ']'); await sleep(50); };
 const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 const canon = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x)) ? Object.keys(x).sort().reduce((o, key) => (o[key] = x[key], o), {}) : x);
@@ -49,16 +50,16 @@ const SHARE_MOCK = () => {
   ok(S.demo && S.debts.length === 3, 'arranca con datos de ejemplo');
   ok(await page.locator('text=Instalala en tu iPhone').count() === 1, 'muestra cómo instalarla en iPhone');
   ok((await page.textContent('#sub')).trim() === 'Octubre 2026', 'encabezado con el mes', await page.textContent('#sub'));
-  for (const t of ['inicio', 'deudas', 'fijos', 'ahorro', 'ajustes']) {
+  for (const t of ['inicio', 'deudas', 'ahorro', 'ajustes']) {
     await tabTo(page, t);
     ok(await overflow(page) <= 0, 'sin scroll horizontal en ' + t, await overflow(page));
     await page.screenshot({ path: path.join(SHOTS, 'iphone-' + t + '.png'), fullPage: true });
   }
   // botón "Compartir resumen" (ahora en Ajustes) con la línea de aviso
-  await tabTo(page, 'ajustes');
+  await tabTo(page, 'inicio');
   const shareCard = page.locator('.card:has([data-a=share])');
   ok((await shareCard.textContent()).includes('historial completo'), 'la línea sobre el botón avisa que va el historial completo');
-  ok(await page.locator('#tabs button').count() === 5 && (await page.textContent('#tabs')).includes('Ajustes') && !(await page.textContent('#tabs')).includes('Plan'), 'pestañas: Inicio, Deudas, Gastos, Ahorro y Ajustes');
+  ok(await page.locator('#tabs button').count() === 4 && !(await page.textContent('#tabs')).includes('Gastos') && (await page.textContent('#tabs')).includes('Ajustes') && !(await page.textContent('#tabs')).includes('Plan'), 'pestañas: Inicio, Deudas, Ahorro y Ajustes');
   ok(!(await page.textContent('#view')).match(/[Cc]olchón/), 'en Ajustes no queda la palabra colchón');
   // áreas táctiles
   await tabTo(page, 'inicio');
@@ -106,11 +107,16 @@ const SHARE_MOCK = () => {
 
   // ---------- 3. plan: ingreso y porcentajes ----------
   await tabTo(page, 'ajustes');
-  ok(await page.locator('#inc').count() === 0 && await page.locator('#pctBox [data-k]').count() === 0, 'en Ajustes los valores se ven sin controles hasta tocar Cambiar');
+  ok(await page.locator('[data-a=aj]').count() === 4 && await page.locator('#inc, #pctBox').count() === 0, 'Ajustes abre con 4 secciones: base, plan de pago, gastos y copia');
+  await ajTo(page, 'plan');
+  ok(await page.locator('#pctBox [data-k]').count() === 0, 'en Plan de pago los valores se ven sin controles hasta tocar Cambiar');
+  await ajTo(page, 'base');
+  ok(await page.locator('#goalin').count() === 0 && await page.locator('#inc').count() === 0, 'en Configuración base sueldo y meta se ven sin controles hasta tocar Cambiar');
   await page.click('[data-a=editsueldo]');
   await page.fill('#inc', '700000');
-  ok((await page.textContent('#pctBox')).includes('$140.000'), 'el plan se recalcula con el nuevo sueldo (20% = $140.000)', (await page.textContent('#pctBox')).slice(0, 200));
   await page.click('[data-a=editdone]');
+  await ajTo(page, 'plan');
+  ok((await page.textContent('#pctBox')).includes('$140.000'), 'el plan se recalcula con el nuevo sueldo (20% = $140.000)', (await page.textContent('#pctBox')).slice(0, 200));
   await page.click('[data-a=editpct]');
   await page.click('#pctBox [data-k=dp][data-d="1"]');
   S = await state(page);
@@ -200,7 +206,7 @@ const SHARE_MOCK = () => {
   ok(await page.locator('[data-a=open]').count() === 3, 'tras borrar vuelve a la lista');
 
   // ---------- 5. gastos fijos y extras ----------
-  await tabTo(page, 'fijos');
+  await ajTo(page, 'gastos');
   await page.click('[data-a=fnew]');
   await page.click('.chip:has-text("Transporte")');
   ok(await page.inputValue('#f-fname') === 'Transporte', 'los atajos completan el nombre');
@@ -225,7 +231,7 @@ const SHARE_MOCK = () => {
   ok((await page.textContent('#view')).includes('Libre para vivir') && !(await page.textContent('#view')).includes('A dónde va'), 'Inicio muestra solo "Libre para vivir" (sin el cuadro de reparto)');
 
   // ---------- 6. ahorro y meta ----------
-  await tabTo(page, 'ajustes');
+  await ajTo(page, 'base');
   await page.click('[data-a=editmeta]');
   await page.fill('#goalin', '50000');
   await page.dispatchEvent('#goalin', 'change');
@@ -272,12 +278,13 @@ const SHARE_MOCK = () => {
   ctx = await newCtx(browser);
   page = await open(ctx, SHARE_MOCK);
   await page.click('text=Ocultar');
-  await tabTo(page, 'ajustes');
+  await ajTo(page, 'base');
   await page.click('[data-a=editsueldo]');
   await page.fill('#inc', '600000');
   await page.click('[data-a=editdone]');
   await sleep(600);
   const atShare = strip(await state(page));
+  await tabTo(page, 'inicio');
   await page.click('[data-a=share]');
   await sleep(300);
   const shared = await page.evaluate(() => window.__shared);
@@ -288,18 +295,21 @@ const SHARE_MOCK = () => {
   ok(shared[0].files[0].bom.join() === '239,187,191' && csv.includes('fecha,tipo,detalle,monto') && /,copia,/.test(csv), 'el CSV lleva BOM (acentos en Excel), historial y copia completa', shared[0].files[0].bom);
   S = await state(page);
   ok(S.lastBackup > 0 && S.log.some((e) => e.t === 'copia'), 'queda anotado cuándo se compartió');
+  await ajTo(page, 'copia');
   await page.click('[data-a=backup]');
   await sleep(300);
   ok((await page.evaluate(() => window.__shared)).length === 2 && (await page.evaluate(() => window.__shared))[1].text === null, '"Guardar copia" manda solo el archivo, sin mensaje');
   // cancelar el menú no marca copia
   await page.evaluate(() => { navigator.share = async () => { const e = new Error('cancel'); e.name = 'AbortError'; throw e; }; });
   const n0 = (await state(page)).log.length;
+  await tabTo(page, 'inicio');
   await page.click('[data-a=share]'); await sleep(300);
   ok((await state(page)).log.length === n0, 'si cancela el menú de compartir no se anota nada');
 
   // ---------- 9. restaurar copia ----------
   const file = path.join(SHOTS, 'copia.csv'); fs.writeFileSync(file, csv);
   const original = atShare; // la copia se arma con el estado justo antes de compartir
+  await ajTo(page, 'copia');
   await page.click('[data-a=rst]');
   ok(await page.locator('[data-a=rstyes]').count() === 1 && await page.locator('[data-a=backup]').count() >= 1, 'empezar de cero pide confirmación y ofrece guardar copia primero');
   await page.click('[data-a=rstyes]');
@@ -316,7 +326,7 @@ const SHARE_MOCK = () => {
   ok(canon(restored) === canon(original), 'restaurar la copia recupera exactamente lo que había', diffState(original, restored));
   // archivo inválido
   fs.writeFileSync(path.join(SHOTS, 'malo.csv'), 'hola,mundo\n1,2');
-  await tabTo(page, 'ajustes');
+  await ajTo(page, 'copia');
   await page.setInputFiles('#impfile', path.join(SHOTS, 'malo.csv'));
   await sleep(200);
   ok((await page.textContent('#view')).includes('no parece una copia'), 'un archivo que no es copia se rechaza con un mensaje claro');
@@ -366,14 +376,15 @@ const SHARE_MOCK = () => {
   await ctx.close();
   ctx = await newCtx(browser, { viewport: { width: 320, height: 568 }, colorScheme: 'dark' });
   page = await open(ctx);
-  for (const t of ['inicio', 'deudas', 'fijos', 'ahorro', 'ajustes']) { await tabTo(page, t); ok(await overflow(page) <= 0, 'iPhone chico (320px), sin scroll horizontal en ' + t, await overflow(page)); }
+  for (const t of ['inicio', 'deudas', 'ahorro', 'ajustes']) { await tabTo(page, t); ok(await overflow(page) <= 0, 'iPhone chico (320px), sin scroll horizontal en ' + t, await overflow(page)); }
+  for (const k of ['base', 'plan', 'gastos', 'copia']) { await ajTo(page, k); ok(await overflow(page) <= 0, 'iPhone chico (320px), sin scroll horizontal en Ajustes/' + k, await overflow(page)); }
   await tabTo(page, 'inicio'); await page.screenshot({ path: path.join(SHOTS, 'iphone-chico-oscuro.png'), fullPage: true });
   await ctx.close();
 
   // ---------- 13. sin menú de compartir (respaldo) ----------
   ctx = await newCtx(browser);
   page = await open(ctx);
-  await tabTo(page, 'ajustes');
+  await tabTo(page, 'inicio');
   const dl = page.waitForEvent('download');
   await page.click('[data-a=share]');
   const d = await dl;
@@ -402,12 +413,12 @@ const SHARE_MOCK = () => {
   ok(await page.locator('text=Paso 3 de 3').count() === 1, 'paso 3: listo');
   await page.screenshot({ path: path.join(SHOTS, 'iphone-config-listo.png'), fullPage: true });
   await page.click('[data-a=wdeudas]');
-  ok(await page.locator('#f-name').count() === 1 && await page.locator('#tabs button').count() === 5, 'lleva directo a cargar la primera deuda');
+  ok(await page.locator('#f-name').count() === 1 && await page.locator('#tabs button').count() === 4, 'lleva directo a cargar la primera deuda');
   await page.fill('#f-name', 'Tarjeta'); await page.fill('#f-amt', '100000'); await page.click('[data-a=saveform]');
   await tabTo(page, 'inicio');
   ok(!(await page.textContent('#view')).includes('Todavía no cargaste tu sueldo'), 'con el sueldo cargado no vuelve a pedirlo');
   await page.reload(); await page.waitForSelector('#view .card');
-  ok(await page.locator('#tabs button').count() === 5, 'al volver a abrir no repite la configuración');
+  ok(await page.locator('#tabs button').count() === 4, 'al volver a abrir no repite la configuración');
   await ctx.close();
   // el aviso de ahorro lleva a la pestaña Ahorro
   ctx = await newCtx(browser);
