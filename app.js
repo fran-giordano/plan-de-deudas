@@ -169,8 +169,8 @@
       h += deudaCard(tot, prev);
     }
     var cp = S.goal > 0 ? Math.min(100, Math.round(S.saved / S.goal * 100)) : 0;
-    h += '<div class="g2" style="gap:8px"><div class="card"><p class="mk-lbl">Libre para vivir</p>' +
-      (S.income > 0 ? '<p class="mk-big sm20" style="color:' + (C.free < 0 ? 'var(--bad)' : 'var(--fg)') + '">' + money(C.free) + '</p><p class="mk-sub">De un sueldo de ' + money(S.income) + ', después de gastos, deudas y ahorro</p>' : '<p class="mk-sub" style="margin-top:6px">Cargá tu sueldo para verlo.</p><button class="lnk" style="padding-left:0" data-a="tab" data-t="ajustes/base">Cargar sueldo</button>') +
+    h += '<div class="g2" style="gap:8px"><div class="card"><p class="mk-lbl">Para el día a día</p>' +
+      (S.income > 0 ? '<p class="mk-big sm20" style="color:' + (C.free < 0 ? 'var(--bad)' : 'var(--fg)') + '">' + money(C.free) + '</p><p class="mk-sub">De un sueldo de ' + money(S.income) + ', después de gastos fijos, deudas y ahorro</p>' : '<p class="mk-sub" style="margin-top:6px">Cargá tu sueldo para verlo.</p><button class="lnk" style="padding-left:0" data-a="tab" data-t="ajustes/base">Cargar sueldo</button>') +
       '</div><button class="card tile" data-a="tab" data-t="ahorro" aria-label="Ir a Ahorro"><span class="tl"><span class="mk-lbl">Ahorro</span>' + (S.goal > 0 ? '<b>' + cp + '%</b>' : '') + '</span><span class="mk-big sm20">' + money(S.saved) + '</span><span class="mk-bar"><i style="width:' + cp + '%;background:var(--good)"></i></span><span class="mk-sub">' + (S.goal > 0 ? 'Meta ' + money(S.goal) : 'Todavía no definiste una meta') + '</span></button></div>';
     h += '<div class="card col" style="gap:8px"><button class="mk-btn" data-a="share">' + ic('share', 18) + 'Compartir resumen</button><p class="mk-sub" style="font-size:13px">Se envía el resumen del mes y el historial completo de todo lo que cargaste. La app nunca manda nada sola.</p></div>';
     return h;
@@ -194,7 +194,12 @@
       h += '<div class="sb"><span>A deudas</span><b>' + S.dp + '% · ' + money(C.T) + '</b></div>';
       h += '<div class="sb"><span>A ahorro</span><b>' + (C.full ? 'Completo · pasa a deudas' : S.sp + '% · ' + money(C.sAmt)) + '</b></div>';
     }
-    h += '<div class="sb mute"><span>Para gastos y vivir</span><span>' + Math.max(0, 100 - S.dp - S.sp) + '%</span></div></div>';
+    h += '</div>';
+    if (inc > 0) {
+      h += '<div class="col" style="gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)"><div class="sb"><span>Gastos fijos</span><b>' + money(C.fixedTotal) + '</b></div>';
+      if (C.extraTotal > 0) h += '<div class="sb"><span>Extras de este mes</span><b>' + money(C.extraTotal) + '</b></div>';
+      h += '<div class="sb"><span style="font-weight:600;color:var(--fg)">Te queda para el día a día</span><b style="color:' + (C.free < 0 ? 'var(--bad)' : 'var(--fg)') + '">' + money(C.free) + '</b></div></div>';
+    }
     if (C.free < 0 && inc > 0) h += '<p class="notice">Los gastos fijos, los extras y el plan superan el sueldo por ' + money(-C.free) + '. Bajá el porcentaje de deudas o de ahorro, o revisá los gastos.</p>';
     if (C.short) h += '<p class="notice">El ' + S.dp + '% no alcanza para los mínimos (' + money(C.sumMin) + '). Se usa ese monto.</p>';
     if (C.full && ctl) h += '<p class="mk-sub" style="margin-top:10px">El ahorro llegó a la meta: el porcentaje de ahorro pasa a deudas.</p>';

@@ -228,7 +228,7 @@ const SHARE_MOCK = () => {
   S = await state(page);
   ok(S.extras.length === 2 && S.log.some((e) => e.t === 'extra_alta'), 'gasto extra puntual');
   await tabTo(page, 'inicio');
-  ok((await page.textContent('#view')).includes('Libre para vivir') && !(await page.textContent('#view')).includes('A dónde va'), 'Inicio muestra solo "Libre para vivir" (sin el cuadro de reparto)');
+  ok((await page.textContent('#view')).includes('Para el día a día') && !(await page.textContent('#view')).includes('A dónde va'), 'Inicio muestra solo "Para el día a día" (sin el cuadro de reparto)');
 
   // ---------- 6. ahorro y meta ----------
   await ajTo(page, 'base');
@@ -399,7 +399,7 @@ const SHARE_MOCK = () => {
   await page.click('[data-a=wnext]');
   ok(await page.locator('#err:visible').count() === 1, 'no deja seguir sin sueldo');
   await page.fill('#inc', '480000');
-  ok((await page.textContent('#pctBox')).includes('$') && (await page.textContent('#pctBox')).includes('70%'), 'muestra cuánto queda para gastos y vivir', (await page.textContent('#pctBox')).slice(0, 160));
+  ok((await page.textContent('#pctBox')).includes('Gastos fijos') && (await page.textContent('#pctBox')).includes('Te queda para el día a día') && !(await page.textContent('#pctBox')).includes('70%'), 'muestra los gastos fijos aparte de lo que queda para el día a día', (await page.textContent('#pctBox')).slice(0, 160));
   await page.click('#pctBox [data-k=dp][data-d="1"]');
   await page.click('[data-a=wnext]');
   ok(await page.locator('text=Paso 2 de 3').count() === 1, 'paso 2: meta de ahorro');
