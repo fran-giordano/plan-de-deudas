@@ -1,6 +1,6 @@
 /* Service worker: guarda todo el código de la app para que funcione sin conexión.
    Para publicar una versión nueva, cambiá VERSION. */
-var VERSION = 'pdd-v1';
+var VERSION = 'pdd-v2';
 var FILES = [
   './', './index.html', './styles.css', './calc.js', './backup.js', './store.js', './app.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'

@@ -356,7 +356,7 @@ const SHARE_MOCK = () => {
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload(); await page.waitForSelector('#view .card');
   ok(await page.evaluate(() => !!navigator.serviceWorker.controller), 'el service worker controla la página');
-  const cached = await page.evaluate(async () => (await (await caches.open('pdd-v1')).keys()).map((r) => new URL(r.url).pathname));
+  const cached = await page.evaluate(async () => (await (await caches.open('pdd-v2')).keys()).map((r) => new URL(r.url).pathname));
   ok(['/', '/index.html', '/app.js', '/calc.js', '/backup.js', '/store.js', '/styles.css', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png'].every((p) => cached.includes(p)), 'toda la app queda en caché', cached);
   await ctx.setOffline(true);
   await page.reload(); await page.waitForSelector('#view .card');
